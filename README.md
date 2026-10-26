@@ -8,13 +8,11 @@ price per kg/l, discount, category, and whether the deal needs a loyalty app.
 
 ## Why / who is it for
 
-Weekly leaflets are long, split across stores, and full of conditions
-("2+1", "z aplikacją", "od czwartku"). A student wants a quick answer to
-_"what's the cheapest pasta / coffee / protein this week, and where?"_
+A student wants a quick answer to "what's the cheapest pasta / coffee / protein this week, and where?"
 
 ## Tech stack (planned)
 
-Everything is **TypeScript** in one **npm workspaces** monorepo, so the offer
+Everything is TypeScript/Python in one npm workspaces monorepo, so the offer
 type and filter schema are defined once (`packages/shared`) and used by the
 scraper, API and frontend.
 
@@ -39,7 +37,7 @@ scraper, API and frontend.
 │   ├── api/        Fastify REST API
 │   └── scraper/    Scheduled worker; one adapter per store in src/adapters/
 ├── packages/
-│   └── shared/     zod schemas + types (Offer, OfferFilters) used everywhere
+│   └── shared/     types (Offer, OfferFilters)
 ├── docs/           Architecture & design notes
 ├── docker-compose.yml
 └── tsconfig.base.json
@@ -87,16 +85,12 @@ Releasing: `git tag v0.1.0 && git push origin v0.1.0`.
 ### Deployment environments
 
 `release.yml` runs in a GitHub Environment, so each publish shows up under
-the repo's **Deployments** and can be gated:
+the repo's Deployments and can be gated:
 
 | Environment  | Used by                     |
 | ------------ | --------------------------- |
 | `production` | tag pushes `v*.*.*`         |
 | `staging`    | manual run (`Run workflow`) |
-
-GitHub creates both environments on first use. Put deploy-time secrets and
-variables (e.g. `DATABASE_URL`, `SCRAPE_CRON`) on the environment rather than
-the repo, so staging and production can differ.
 
 ## Scraping etiquette & legal note
 
