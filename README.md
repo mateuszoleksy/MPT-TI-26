@@ -92,6 +92,8 @@ the repo's Deployments and can be gated:
 | `production` | tag pushes `v*.*.*`         |
 | `staging`    | manual run (`Run workflow`) |
 
+[![Release Docker images](https://github.com/mateuszoleksy/MPT-TI-26/actions/workflows/release.yml/badge.svg)](https://github.com/mateuszoleksy/MPT-TI-26/actions/workflows/release.yml)
+
 ## Scraping etiquette & legal note
 
 This is an educational project. The scraper must:
