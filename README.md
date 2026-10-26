@@ -18,19 +18,20 @@ Everything is **TypeScript** in one **npm workspaces** monorepo, so the offer
 type and filter schema are defined once (`packages/shared`) and used by the
 scraper, API and frontend.
 
-| Layer           | Choice                                       | Why                                                                 |
-| --------------- | -------------------------------------------- | ------------------------------------------------------------------- |
-| Language        | TypeScript                     | One language for the whole team; types catch scraper/API mismatches |
-| Frontend        | React + Vite                             | Fast dev server, huge ecosystem, easy to find help                  |
-| API             | Fastify                                      | Fast, TS-friendly, schema validation                                |
-| Database        | PostgreSQL                               | Filtering/sorting/full-text search are SQL's strengths              |
-| Scraping        | fetch + Cheerio; Playwright when needed      | Cheerio for static HTML; Playwright only for JS-rendered pages      |
-| Scheduling      | node-cron                                    | Simple; upgrade to BullMQ + Redis only if needed                    |
-| Containers      | Docker + docker compose                      | Whole stack starts with one command on any laptop                   |
-| CI/CD           | GitHub Actions + GHCR, Renovate              | Checks on every PR, images on tag, automated dependency updates     |
-| Tests           | Vitest; scraper tests on saved HTML fixtures | Scraper tests don't hit live sites                                  |
+| Layer      | Choice                                       | Why                                                                 |
+| ---------- | -------------------------------------------- | ------------------------------------------------------------------- |
+| Language   | TypeScript                                   | One language for the whole team; types catch scraper/API mismatches |
+| Frontend   | React + Vite                                 | Fast dev server, huge ecosystem, easy to find help                  |
+| API        | Fastify                                      | Fast, TS-friendly, schema validation                                |
+| Database   | PostgreSQL                                   | Filtering/sorting/full-text search are SQL's strengths              |
+| Scraping   | fetch + Cheerio; Playwright when needed      | Cheerio for static HTML; Playwright only for JS-rendered pages      |
+| Scheduling | node-cron                                    | Simple; upgrade to BullMQ + Redis only if needed                    |
+| Containers | Docker + docker compose                      | Whole stack starts with one command on any laptop                   |
+| CI/CD      | GitHub Actions + GHCR, Renovate              | Checks on every PR, images on tag, automated dependency updates     |
+| Tests      | Vitest; scraper tests on saved HTML fixtures | Scraper tests don't hit live sites                                  |
 
 ## Repository layout
+
 ```
 .
 ├── apps/
@@ -90,7 +91,7 @@ the repo's **Deployments** and can be gated:
 
 | Environment  | Used by                     |
 | ------------ | --------------------------- |
-| `production` | tag pushes `v*.*.*`        |
+| `production` | tag pushes `v*.*.*`         |
 | `staging`    | manual run (`Run workflow`) |
 
 GitHub creates both environments on first use. Put deploy-time secrets and
