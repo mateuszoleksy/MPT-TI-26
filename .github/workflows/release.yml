@@ -15,6 +15,10 @@ jobs:
   publish:
     name: Publish ${{ matrix.app }}
     runs-on: ubuntu-latest
+    # Tags publish to production; manual runs go to staging (see README → CI/CD)
+    environment:
+      name: ${{ startsWith(github.ref, 'refs/tags/') && 'production' || 'staging' }}
+      url: ${{ github.server_url }}/${{ github.repository }}/packages
     strategy:
       matrix:
         app: [api, web, scraper]

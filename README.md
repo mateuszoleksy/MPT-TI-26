@@ -152,6 +152,20 @@ flowchart LR
 
 Releasing: `git tag v0.1.0 && git push origin v0.1.0`.
 
+### Deployment environments
+
+`release.yml` runs in a GitHub Environment, so each publish shows up under
+the repo's **Deployments** and can be gated:
+
+| Environment  | Used by                     | Suggested protection (Settings → Environments)       |
+| ------------ | --------------------------- | ---------------------------------------------------- |
+| `production` | tag pushes `v*.*.*`         | Required reviewers; deployment tags `v*.*.*` only    |
+| `staging`    | manual run (`Run workflow`) | None — for testing images from a branch before a tag |
+
+GitHub creates both environments on first use. Put deploy-time secrets and
+variables (e.g. `DATABASE_URL`, `SCRAPE_CRON`) on the environment rather than
+the repo, so staging and production can differ.
+
 ## Roadmap
 
 1. **Environment** — monorepo, Docker, shared types _(this commit)_
