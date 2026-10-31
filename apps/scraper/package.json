@@ -13,7 +13,7 @@
   "dependencies": {
     "@promo/shared": "0.1.0",
     "cheerio": "^1.0.0",
-    "node-cron": "^3.0.3"
+    "node-cron": "^4.6.0"
   },
   "devDependencies": {
     "@types/node-cron": "^3.0.11"
