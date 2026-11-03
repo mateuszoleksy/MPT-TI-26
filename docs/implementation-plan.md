@@ -9,6 +9,7 @@
 ## 1. Analiza stanu obecnego (As-Is)
 
 ### Co jest zrobione i skonfigurowane:
+
 1. **Monorepo (npm workspaces):**
    - Trzy aplikacje: `apps/api` (Fastify), `apps/scraper` (Node worker), `apps/web` (React/Vite) oraz pakiet `packages/shared`.
    - Wspólny `tsconfig.base.json` (ES2022, NodeNext, strict) oraz formatowanie Prettier.
@@ -24,6 +25,7 @@
    - GitHub Actions CI (lint, typecheck, test, docker build).
 
 ### Luki do działającego MVP:
+
 1. **Baza danych:** Brak biblioteki ORM (Drizzle), brak schematu tabel (`offers`, `categories`, `scrape_runs`) i migracji. Kontener wstaje pusty.
 2. **Scraper:** Adaptery `biedronka.ts` i `lidl.ts` zwracają `[]`. Brak parsowania Cheerio i brak zapisu (`UPSERT`) do bazy.
 3. **API:** `/api/offers` zwraca sztywny mock zamiast zapytań SQL z klauzulami `WHERE`, `ORDER BY`, `LIMIT/OFFSET`.
@@ -84,7 +86,9 @@ flowchart TD
 
 1. **Helper ceny jednostkowej w `@promo/shared`:**
    ```typescript
-   export function pricePerUnit(o: Pick<Offer, 'pricePromo' | 'unit' | 'unitQuantity'>): number | null {
+   export function pricePerUnit(
+     o: Pick<Offer, 'pricePromo' | 'unit' | 'unitQuantity'>,
+   ): number | null {
      if (!o.unit || !o.unitQuantity || o.unitQuantity <= 0) return null;
      return o.pricePromo / o.unitQuantity;
    }
