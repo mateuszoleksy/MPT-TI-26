@@ -17,7 +17,8 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "format": "prettier --write .",
     "test": "npm run test --workspaces --if-present",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "offers:blix": "npm run offers:blix -w @promo/scraper --"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",
