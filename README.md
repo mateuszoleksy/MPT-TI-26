@@ -56,6 +56,33 @@ _"what's the cheapest pasta / coffee / protein this week, and where?"_
 Mobile-first: on phones the filter panel collapses into a bottom sheet — most
 students will check this in the shop.
 
+## Current state: live demo
+
+The first clickable version runs on **hard-coded sample data** — there is no
+scraper or database behind it yet.
+
+| File                    | What it contains                                                               |
+| ----------------------- | ------------------------------------------------------------------------------ |
+| `apps/api/src/index.ts` | Fastify API; `GET /api/offers` returns 12 sample offers (Lidl + Biedronka)     |
+| `apps/web/src/App.tsx`  | The whole UI on one screen: offer grid, search, store, max price, no-app, sort |
+| `packages/shared`       | The `Offer` type and filter schema used by both of the above                   |
+
+Sample names and promo prices come from Blix.pl leaflets (7.11.2026); regular
+prices, units and conditions were added by hand. Offer dates are fixed
+(5–11.11 and 12–18.11.2026). Filtering and sorting happen in the browser.
+
+Run it (two terminals):
+
+```bash
+npm install
+npm run build -w @promo/shared
+npm run dev:api        # http://localhost:3000/api/offers
+npm run dev:web        # http://localhost:5173
+```
+
+Usage scenarios 1–4 can be shown in the demo; 5 only as an "od 12.11" label on
+the card; 6 (filters in the URL) is not implemented yet.
+
 ## Tech stack
 
 Everything is **TypeScript** in one **npm workspaces** monorepo, so the offer
@@ -125,11 +152,18 @@ npm install
 docker compose up --build
 #   web: http://localhost:8080   api: http://localhost:3000/api/health
 
-# Option B — local dev with hot reload (DB in Docker)
+# Option B — local dev with hot reload (DB in Docker), one terminal each
 docker compose up -d db
-npm run dev            # api :3000, web :5173, scraper on cron
+npm run build -w @promo/shared
+npm run dev:api        # api :3000
+npm run dev:web        # web :5173
+npm run dev:scraper    # scraper on cron
 npm run scrape:once -w @promo/scraper   # run scrapers immediately
 ```
+
+`npm run dev` runs the workspaces one after another, so it stops at the API
+(a long-running process) and never starts the web app — use the separate
+`dev:*` scripts above.
 
 Other scripts: `npm test`, `npm run build`, `npm run typecheck`, `npm run format`.
 
@@ -168,7 +202,8 @@ the repo, so staging and production can differ.
 
 ## Roadmap
 
-1. **Environment** — monorepo, Docker, shared types _(this commit)_
+1. **Environment** — monorepo, Docker, shared types _(done)_
+   - **Live demo** — UI on hard-coded sample data _(done)_
 2. **Scraper MVP** — real Biedronka + Lidl adapters, HTML fixtures, tests
 3. **Database** — Drizzle schema + migrations, scraper upserts, API reads from DB
 4. **Filters & UI** — filter panel, URL state, offer cards, mobile layout

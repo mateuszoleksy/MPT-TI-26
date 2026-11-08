@@ -1,3 +1,8 @@
+// API (Fastify, port 3000). Uruchomienie: npm run dev:api
+// GET /api/health - czy serwer działa
+// GET /api/offers - lista ofert { items, total, filters }
+// Na razie dane wpisane na sztywno w `sample`, potem będą z bazy.
+// Pola oferty: typ Offer w packages/shared/src/index.ts
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { OfferFiltersSchema, type Offer } from '@promo/shared';
@@ -5,12 +10,16 @@ import { OfferFiltersSchema, type Offer } from '@promo/shared';
 const app = Fastify({ logger: true });
 await app.register(cors);
 
+// Prosty test, czy serwer odpowiada.
 app.get('/api/health', async () => ({ status: 'ok' }));
 
+// Link do strony sklepu – w prawdziwych danych będzie to link do konkretnej gazetki.
 const LIDL = 'https://www.lidl.pl/';
 const BIEDRONKA = 'https://www.biedronka.pl/';
 
-// Names and promo prices come from real Blix.pl leaflets (7.11.2026); the rest is made up.
+// nazwy i ceny z blixa z dnia: 7.11.2026, reszta pól dopisana ręcznie
+// l6 i b6 bez ceny regularnej i jednostki - jak niepełne dane z Blixa
+// prettier-ignore: jedna oferta = jedna linia
 // prettier-ignore
 const sample: Offer[] = [
   { id: 'l1', store: 'lidl', name: 'Banany luzem', category: 'owoce i warzywa', priceRegular: 5.49, pricePromo: 2.99, unit: 'kg', unitQuantity: 1, conditions: null, requiresApp: false, imageUrl: null, sourceUrl: LIDL, validFrom: '2026-11-05', validTo: '2026-11-11' },
@@ -27,11 +36,14 @@ const sample: Offer[] = [
   { id: 'b6', store: 'biedronka', name: 'Winogrona na wagę', category: null, priceRegular: null, pricePromo: 5.99, unit: null, unitQuantity: null, conditions: null, requiresApp: false, imageUrl: null, sourceUrl: BIEDRONKA, validFrom: '2026-11-05', validTo: '2026-11-11' },
 ];
 
+// Zwraca wszystkie przykładowe oferty. Parametry zapytania (np. ?store=lidl) są tylko
+// sprawdzane schematem OfferFiltersSchema – przy błędnych parametrach odpowiedź 400.
 app.get('/api/offers', async (req, reply) => {
   const parsed = OfferFiltersSchema.safeParse(req.query);
   if (!parsed.success) return reply.code(400).send(parsed.error.flatten());
   return { items: sample, total: sample.length, filters: parsed.data };
 });
 
+// Port można zmienić zmienną środowiskową API_PORT (patrz .env.example).
 const port = Number(process.env.API_PORT ?? 3000);
 await app.listen({ port, host: '0.0.0.0' });
