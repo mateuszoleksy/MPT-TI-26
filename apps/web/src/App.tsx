@@ -1,28 +1,36 @@
+// Główny ekran demo. Uruchomienie: npm run dev:web (API musi działać).
+// Pobiera oferty z /api/offers, filtruje i sortuje je w przeglądarce, pokazuje jako kafelki.
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { discountPercent, type Offer } from '@promo/shared';
 
+// Cena za kg / l / szt. Zwraca null, gdy oferta nie ma podanej jednostki
+// (wtedy kafelek pokazuje „brak danych”, a przy sortowaniu oferta trafia na koniec).
 function pricePerUnit(o: Offer): number | null {
   if (!o.unit || !o.unitQuantity) return null;
   return o.pricePromo / o.unitQuantity;
 }
 
+// 2.5 -> "2,50 zł" (polski zapis z przecinkiem).
 function formatPrice(value: number): string {
   return value.toFixed(2).replace('.', ',') + ' zł';
 }
 
+// "2026-11-12" -> "12.11".
 function formatDate(date: string): string {
   const [, month, day] = date.split('-');
   return `${day}.${month}`;
 }
 
 export function App() {
+  // Aktualne ustawienia filtrów wybrane przez użytkownika.
   const [search, setSearch] = useState('');
   const [store, setStore] = useState('all');
   const [maxPrice, setMaxPrice] = useState('');
   const [noApp, setNoApp] = useState(false);
   const [sort, setSort] = useState('price');
 
+  // Pobranie ofert z API. TanStack Query sam obsługuje stan ładowania i błędu.
   const { data, isLoading, error } = useQuery({
     queryKey: ['offers'],
     queryFn: async (): Promise<{ items: Offer[] }> => {
@@ -35,8 +43,10 @@ export function App() {
   if (isLoading) return <p style={{ padding: 16 }}>Ładowanie…</p>;
   if (error) return <p style={{ padding: 16 }}>Błąd: {String(error)}</p>;
 
+  // Dzisiejsza data w formacie RRRR-MM-DD, potrzebna do etykiety „od / do”.
   const today = new Date().toISOString().slice(0, 10);
 
+  // Zostawiamy tylko oferty spełniające wszystkie wybrane filtry.
   let offers = (data?.items ?? []).filter((o) => {
     if (search && !o.name.toLowerCase().includes(search.toLowerCase())) return false;
     if (store !== 'all' && o.store !== store) return false;
@@ -45,6 +55,7 @@ export function App() {
     return true;
   });
 
+  // Sortowanie rosnąco po cenie albo po cenie za kg/l (oferty bez jednostki na końcu).
   offers = [...offers].sort((a, b) => {
     if (sort === 'unit') return (pricePerUnit(a) ?? Infinity) - (pricePerUnit(b) ?? Infinity);
     return a.pricePromo - b.pricePromo;
@@ -54,6 +65,7 @@ export function App() {
     <main style={{ fontFamily: 'system-ui', maxWidth: 960, margin: '0 auto', padding: 16 }}>
       <h1>Promki dla studenta</h1>
 
+      {/* Pasek filtrów */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
         <input
           placeholder="Szukaj, np. kawa"
@@ -87,6 +99,7 @@ export function App() {
 
       <p>Znaleziono: {offers.length}</p>
 
+      {/* Siatka kafelków: tyle kolumn, ile się zmieści (min. 160 px), na telefonie jedna. */}
       <div
         style={{
           display: 'grid',
@@ -98,6 +111,7 @@ export function App() {
           const discount = discountPercent(o);
           const perUnit = pricePerUnit(o);
           return (
+            // Kafelek jednej oferty
             <div key={o.id} style={{ border: '1px solid #ccc', borderRadius: 8, padding: 10 }}>
               <b style={{ color: o.store === 'lidl' ? '#0050aa' : '#e30613' }}>
                 {o.store === 'lidl' ? 'Lidl' : 'Biedronka'}
