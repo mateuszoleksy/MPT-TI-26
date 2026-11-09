@@ -1,36 +1,42 @@
-// Główny ekran demo. Uruchomienie: npm run dev:web (API musi działać).
-// Pobiera oferty z /api/offers, filtruje i sortuje je w przeglądarce, pokazuje jako kafelki.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { discountPercent, type Offer } from '@promo/shared';
+import {
+  discountPercent,
+  getPromotionStatus,
+  todayInWarsaw,
+  type Offer,
+  type PromotionStatus,
+} from '@promo/shared';
+import { PromotionValidity } from './components/PromotionValidity';
 
-// Cena za kg / l / szt. Zwraca null, gdy oferta nie ma podanej jednostki
-// (wtedy kafelek pokazuje „brak danych”, a przy sortowaniu oferta trafia na koniec).
 function pricePerUnit(o: Offer): number | null {
-  if (!o.unit || !o.unitQuantity) return null;
+  if (!o.unit || !o.unitQuantity || o.unitQuantity <= 0) return null;
   return o.pricePromo / o.unitQuantity;
 }
 
-// 2.5 -> "2,50 zł" (polski zapis z przecinkiem).
 function formatPrice(value: number): string {
   return value.toFixed(2).replace('.', ',') + ' zł';
 }
 
-// "2026-11-12" -> "12.11".
-function formatDate(date: string): string {
-  const [, month, day] = date.split('-');
-  return `${day}.${month}`;
-}
+type StatusFilter = PromotionStatus | 'all';
+type SortMode = 'price' | 'unit' | 'validTo';
 
 export function App() {
-  // Aktualne ustawienia filtrów wybrane przez użytkownika.
   const [search, setSearch] = useState('');
   const [store, setStore] = useState('all');
   const [maxPrice, setMaxPrice] = useState('');
   const [noApp, setNoApp] = useState(false);
-  const [sort, setSort] = useState('price');
+  const [sort, setSort] = useState<SortMode>('price');
+  const [status, setStatus] = useState<StatusFilter>('active');
+  const [onDate, setOnDate] = useState(todayInWarsaw);
+  const [today, setToday] = useState(todayInWarsaw);
 
-  // Pobranie ofert z API. TanStack Query sam obsługuje stan ładowania i błędu.
+  // Keep the "today" shortcut correct when the browser stays open overnight.
+  useEffect(() => {
+    const interval = setInterval(() => setToday(todayInWarsaw()), 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
   const { data, isLoading, error } = useQuery({
     queryKey: ['offers'],
     queryFn: async (): Promise<{ items: Offer[] }> => {
@@ -43,36 +49,43 @@ export function App() {
   if (isLoading) return <p style={{ padding: 16 }}>Ładowanie…</p>;
   if (error) return <p style={{ padding: 16 }}>Błąd: {String(error)}</p>;
 
-  // Dzisiejsza data w formacie RRRR-MM-DD, potrzebna do etykiety „od / do”.
-  const today = new Date().toISOString().slice(0, 10);
-
-  // Zostawiamy tylko oferty spełniające wszystkie wybrane filtry.
+  // For the current demo, filtering happens in the browser on API sample data.
+  // The same date rules can later be used by the PostgreSQL-backed API.
   let offers = (data?.items ?? []).filter((o) => {
     if (search && !o.name.toLowerCase().includes(search.toLowerCase())) return false;
     if (store !== 'all' && o.store !== store) return false;
     if (maxPrice && o.pricePromo > Number(maxPrice)) return false;
     if (noApp && o.requiresApp) return false;
+    if (status !== 'all' && getPromotionStatus(o, onDate) !== status) return false;
     return true;
   });
 
-  // Sortowanie rosnąco po cenie albo po cenie za kg/l (oferty bez jednostki na końcu).
   offers = [...offers].sort((a, b) => {
     if (sort === 'unit') return (pricePerUnit(a) ?? Infinity) - (pricePerUnit(b) ?? Infinity);
+    if (sort === 'validTo')
+      return a.validTo.localeCompare(b.validTo) || a.name.localeCompare(b.name);
     return a.pricePromo - b.pricePromo;
   });
 
   return (
     <main style={{ fontFamily: 'system-ui', maxWidth: 960, margin: '0 auto', padding: 16 }}>
       <h1>Promki dla studenta</h1>
-
-      {/* Pasek filtrów */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 12,
+          marginBottom: 16,
+          alignItems: 'center',
+        }}
+      >
         <input
+          aria-label="Szukaj produktu"
           placeholder="Szukaj, np. kawa"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <select value={store} onChange={(e) => setStore(e.target.value)}>
+        <select aria-label="Sklep" value={store} onChange={(e) => setStore(e.target.value)}>
           <option value="all">Oba sklepy</option>
           <option value="biedronka">Biedronka</option>
           <option value="lidl">Lidl</option>
@@ -81,6 +94,7 @@ export function App() {
           Maks. cena:{' '}
           <input
             type="number"
+            min="0"
             style={{ width: 70 }}
             value={maxPrice}
             onChange={(e) => setMaxPrice(e.target.value)}
@@ -91,19 +105,58 @@ export function App() {
           <input type="checkbox" checked={noApp} onChange={(e) => setNoApp(e.target.checked)} /> Bez
           aplikacji
         </label>
-        <select value={sort} onChange={(e) => setSort(e.target.value)}>
+        <select
+          aria-label="Sortowanie"
+          value={sort}
+          onChange={(e) => setSort(e.target.value as SortMode)}
+        >
           <option value="price">Sortuj: najniższa cena</option>
           <option value="unit">Sortuj: cena za kg / l</option>
+          <option value="validTo">Sortuj: najbliższy koniec</option>
         </select>
       </div>
 
-      <p>Znaleziono: {offers.length}</p>
+      <fieldset
+        style={{ border: '1px solid #ddd', borderRadius: 8, padding: 12, margin: '0 0 16px' }}
+      >
+        <legend style={{ fontWeight: 700 }}>Terminy promocji</legend>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+          <label>
+            Sprawdź na dzień:{' '}
+            <input
+              type="date"
+              aria-label="Data sprawdzania promocji"
+              value={onDate}
+              onChange={(e) => {
+                if (e.target.value) setOnDate(e.target.value);
+              }}
+            />
+          </label>
+          <button type="button" onClick={() => setOnDate(today)} disabled={onDate === today}>
+            Dzisiaj
+          </button>
+          <label>
+            Status:{' '}
+            <select
+              aria-label="Status promocji"
+              value={status}
+              onChange={(e) => setStatus(e.target.value as StatusFilter)}
+            >
+              <option value="active">Aktywne</option>
+              <option value="upcoming">Nadchodzące</option>
+              <option value="expired">Zakończone</option>
+              <option value="all">Wszystkie</option>
+            </select>
+          </label>
+        </div>
+      </fieldset>
 
-      {/* Siatka kafelków: tyle kolumn, ile się zmieści (min. 160 px), na telefonie jedna. */}
+      <p>Znaleziono: {offers.length}</p>
+      {offers.length === 0 && <p>Brak promocji spełniających wybrane kryteria.</p>}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))',
           gap: 12,
         }}
       >
@@ -111,8 +164,7 @@ export function App() {
           const discount = discountPercent(o);
           const perUnit = pricePerUnit(o);
           return (
-            // Kafelek jednej oferty
-            <div key={o.id} style={{ border: '1px solid #ccc', borderRadius: 8, padding: 10 }}>
+            <article key={o.id} style={{ border: '1px solid #ccc', borderRadius: 8, padding: 10 }}>
               <b style={{ color: o.store === 'lidl' ? '#0050aa' : '#e30613' }}>
                 {o.store === 'lidl' ? 'Lidl' : 'Biedronka'}
               </b>
@@ -120,22 +172,18 @@ export function App() {
               <p style={{ margin: 0, fontSize: 20, fontWeight: 'bold' }}>
                 {formatPrice(o.pricePromo)}
               </p>
-              {o.priceRegular && (
+              {o.priceRegular !== null && (
                 <p style={{ margin: 0, color: '#888' }}>
                   <s>{formatPrice(o.priceRegular)}</s> {discount !== null && `(-${discount}%)`}
                 </p>
               )}
-              <p style={{ margin: '4px 0', color: perUnit ? 'green' : '#aaa' }}>
-                {perUnit ? `${formatPrice(perUnit)}/${o.unit}` : 'cena/kg: brak danych'}
+              <p style={{ margin: '4px 0', color: perUnit !== null ? 'green' : '#aaa' }}>
+                {perUnit !== null ? `${formatPrice(perUnit)}/${o.unit}` : 'cena/kg: brak danych'}
               </p>
               {o.requiresApp && <p style={{ margin: 0 }}>📱 z aplikacją</p>}
               {o.conditions && !o.requiresApp && <p style={{ margin: 0 }}>{o.conditions}</p>}
-              <small>
-                {o.validFrom > today
-                  ? `od ${formatDate(o.validFrom)}`
-                  : `do ${formatDate(o.validTo)}`}
-              </small>
-            </div>
+              <PromotionValidity period={o} onDate={onDate} />
+            </article>
           );
         })}
       </div>
