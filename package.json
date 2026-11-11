@@ -6,7 +6,7 @@
     "apps/*"
   ],
   "engines": {
-    "node": ">=22"
+    "node": ">=24"
   },
   "scripts": {
     "dev": "npm run build -w @promo/shared && npm run dev --workspaces --if-present",
@@ -17,12 +17,13 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "format": "prettier --write .",
     "test": "npm run test --workspaces --if-present",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "offers:blix": "npm run offers:blix -w @promo/scraper --"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",
-    "prettier": "^3.3.3",
-    "tsx": "^4.19.2",
-    "typescript": "^5.6.3"
+    "prettier": "^3.9.10",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
   }
 }
