@@ -47,3 +47,14 @@ export function discountPercent(o: Pick<Offer, 'priceRegular' | 'pricePromo'>): 
   if (!o.priceRegular || o.priceRegular <= 0) return null;
   return Math.round((1 - o.pricePromo / o.priceRegular) * 100);
 }
+
+export {
+  daysBetween,
+  formatPromotionDate,
+  getPromotionDaysRemaining,
+  getPromotionLabel,
+  getPromotionStatus,
+  isPromotionActiveOn,
+  todayInWarsaw,
+} from './promotionDates.js';
+export type { PromotionPeriod, PromotionStatus } from './promotionDates.js';
