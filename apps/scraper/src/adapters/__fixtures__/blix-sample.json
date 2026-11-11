@@ -1,0 +1,34 @@
+{
+  "capturedOn": "2026-11-05",
+  "description": "Reduced fields transcribed from live window.offers; not a full leaflet capture. IDs retained from the first Biedronka page.",
+  "sourceUrl": "https://blix.pl/sklep/biedronka/gazetka/534003/",
+  "offers": [
+    {
+      "name": "Pieczarki",
+      "price": 499,
+      "leafletId": 534003,
+      "pageNumber": 0,
+      "productLeafletPageUuid": "01a1ab88-50b6-78b3-9606-18acc00df8de",
+      "dateStart": { "date": "2026-11-05 00:00:00.000000", "timezone": "Europe/Warsaw" },
+      "dateEnd": { "date": "2026-11-07 23:59:59.000000", "timezone": "Europe/Warsaw" }
+    },
+    {
+      "name": "Mleko UHT Mleczna Dolina 3,2%",
+      "price": 199,
+      "leafletId": 534003,
+      "pageNumber": 0,
+      "productLeafletPageUuid": "01a1ab88-50b6-774b-9606-18acbdff0fe9",
+      "dateStart": { "date": "2026-11-05 00:00:00.000000", "timezone": "Europe/Warsaw" },
+      "dateEnd": { "date": "2026-11-07 23:59:59.000000", "timezone": "Europe/Warsaw" }
+    },
+    {
+      "name": "Paczkowane parówki",
+      "price": null,
+      "leafletId": 534003,
+      "pageNumber": 0,
+      "productLeafletPageUuid": "01a1ab88-50b6-780f-9606-18acbecb274e",
+      "dateStart": { "date": "2026-11-05 00:00:00.000000", "timezone": "Europe/Warsaw" },
+      "dateEnd": { "date": "2026-11-07 23:59:59.000000", "timezone": "Europe/Warsaw" }
+    }
+  ]
+}
