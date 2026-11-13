@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vitest';
 import { buildApp } from './app.js';
 
 test('validates filters before reading the database', async () => {

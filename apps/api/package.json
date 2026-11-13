@@ -8,11 +8,14 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --import tsx --test src/*.test.ts"
+    "test": "vitest run src"
   },
   "dependencies": {
     "@fastify/cors": "^11.3.1",
     "@promo/shared": "0.1.0",
     "fastify": "^5.1.0"
+  },
+  "devDependencies": {
+    "vitest": "^5.1.0"
   }
 }
