@@ -25,7 +25,7 @@ async function main() {
   if (args.list) {
     const leaflets = await listBlixLeaflets(store);
     if (!leaflets.length) throw new Error('No leaflet metadata found');
-    if (args.json) console.log(JSON.stringify(leaflets, null, 2));
+    if (args.json) console.info(JSON.stringify(leaflets, null, 2));
     else console.table(leaflets);
     return;
   }
@@ -38,7 +38,7 @@ async function main() {
   const candidates = results.flatMap((result) => result.candidates);
   const failures = batch?.failures ?? [];
   if (args.json)
-    console.log(
+    console.info(
       JSON.stringify(
         {
           input: args.file ? 'saved HTML' : 'live HTTP',
@@ -53,11 +53,11 @@ async function main() {
       ),
     );
   else {
-    console.log(
+    console.info(
       `Source: ${args.file ? `saved HTML (${args.file})` : 'live HTTP'}; leaflets: ${results.length}; candidates: ${candidates.length}; failed leaflets: ${failures.length}`,
     );
     if (batch) console.table(batch.leaflets);
-    console.log(
+    console.info(
       'Review required: prices, terms, units and source dates are not independently confirmed.',
     );
     console.table(
@@ -73,7 +73,7 @@ async function main() {
         })),
     );
     if (candidates.length > 20)
-      console.log('Showing the first 20 candidates; use --json for all records.');
+      console.info('Showing the first 20 candidates; use --json for all records.');
     if (failures.length) console.table(failures);
   }
   if (!candidates.length || failures.length) process.exitCode = 1;
