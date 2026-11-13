@@ -1,0 +1,6 @@
+{
+  "rules": {
+    "no-console": ["error", { "allow": ["info", "table", "warn", "error"] }],
+    "no-unused-vars": "error"
+  }
+}

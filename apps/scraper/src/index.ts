@@ -15,7 +15,7 @@ async function runAll(): Promise<boolean> {
       const raw = await adapter.fetchOffers();
       const valid = raw.filter((o) => OfferSchema.safeParse(o).success);
       // TODO: upsert `valid` into PostgreSQL and record a scrape_runs row
-      console.log(
+      console.info(
         `[${adapter.store}] ${valid.length}/${raw.length} valid offers in ${Date.now() - started} ms`,
       );
     } catch (err) {
@@ -50,12 +50,12 @@ if (process.argv.includes('--once')) {
   const timezone = process.env.SCRAPE_TZ ?? 'Europe/Warsaw';
   if (!cron.validate(schedule)) throw new Error(`Invalid SCRAPE_CRON: "${schedule}"`);
   const task = cron.schedule(schedule, runAll, { name: 'scrape', timezone, noOverlap: true });
-  console.log(
+  console.info(
     `Scraper scheduled: "${schedule}" (${timezone}), next run ${task.getNextRun()?.toISOString()}`,
   );
   for (const signal of ['SIGINT', 'SIGTERM'] as const)
     process.once(signal, async () => {
-      console.log(`${signal} received, stopping scheduler`);
+      console.info(`${signal} received, stopping scheduler`);
       await cron.shutdown();
       process.exit(0);
     });
