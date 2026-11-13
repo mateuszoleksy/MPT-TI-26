@@ -12,7 +12,7 @@ async function runAll() {
       const raw = await adapter.fetchOffers();
       const valid = raw.filter((o) => OfferSchema.safeParse(o).success);
       // TODO: upsert `valid` into PostgreSQL and record a scrape_runs row
-      console.log(
+      console.info(
         `[${adapter.store}] ${valid.length}/${raw.length} valid offers in ${Date.now() - started} ms`,
       );
     } catch (err) {
@@ -25,6 +25,6 @@ if (process.argv.includes('--once')) {
   await runAll();
 } else {
   const schedule = process.env.SCRAPE_CRON ?? '0 6 * * *';
-  console.log(`Scraper scheduled: "${schedule}"`);
+  console.info(`Scraper scheduled: "${schedule}"`);
   cron.schedule(schedule, runAll);
 }
