@@ -6,6 +6,7 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { OfferFiltersSchema, type Offer } from '@promo/shared';
+import { applyPromotionDateFilter } from './promotionFilter.js';
 
 const app = Fastify({ logger: true });
 await app.register(cors);
@@ -41,7 +42,8 @@ const sample: Offer[] = [
 app.get('/api/offers', async (req, reply) => {
   const parsed = OfferFiltersSchema.safeParse(req.query);
   if (!parsed.success) return reply.code(400).send(parsed.error.flatten());
-  return { items: sample, total: sample.length, filters: parsed.data };
+  const items = applyPromotionDateFilter(sample, parsed.data.activeOn);
+  return { items, total: items.length, filters: parsed.data };
 });
 
 // Port można zmienić zmienną środowiskową API_PORT (patrz .env.example).
