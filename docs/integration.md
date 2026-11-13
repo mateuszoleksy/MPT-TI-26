@@ -1,6 +1,12 @@
 # Database integration
 
-Run from the repository root with Node 24. Copy `.env.example` to `.env` and set `DATABASE_URL`.
+Run from the repository root with Node 24. Copy `.env.example` to `.env`. For the default local PostgreSQL container, use:
+
+```dotenv
+DATABASE_URL=postgres://promo:promo@localhost:5432/promo
+```
+
+The URL contains the database user, password, host, port and database name. Adjust it if your PostgreSQL settings differ.
 
 ```sh
 npm ci                              # install dependencies
