@@ -14,6 +14,7 @@
     "dev:web": "npm run dev -w @promo/web",
     "dev:scraper": "npm run dev -w @promo/scraper",
     "build": "npm run build --workspaces --if-present",
+    "lint": "oxlint apps packages",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "format": "prettier --write .",
     "test": "npm run test --workspaces --if-present",
@@ -23,6 +24,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.19.2",
+    "oxlint": "^1.93.0",
     "prettier": "^3.9.10",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"

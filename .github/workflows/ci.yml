@@ -24,6 +24,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run format:check
+      - run: npm run lint
       # shared must be built first: the other workspaces import its compiled types
       - run: npm run build -w @promo/shared
       - run: npm run typecheck
