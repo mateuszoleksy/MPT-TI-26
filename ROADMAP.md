@@ -1,8 +1,8 @@
 # Roadmapa MVP — weryfikacja względem implementacji
 
-**Stan na:** 2026-11-13  
-**Porównana baza:** `main` (`124d152`, merge PR #21)  
-**Dokument źródłowy:** [docs/implementation-plan.md](docs/implementation-plan.md)
+- **Stan na:** 2026-11-13
+- **Porównana baza:** `main` (`124d152`, merge PR #21)
+- **Dokument źródłowy:** [docs/implementation-plan.md](docs/implementation-plan.md)
 
 ## Podsumowanie
 
