@@ -1,8 +1,11 @@
-import { connectDatabase, listSourceOffers } from '@promo/shared/db';
+import { checkDatabase, connectDatabase, listSourceOffers } from '@promo/shared/db';
 import { buildApp } from './app.js';
 
 const database = connectDatabase();
-const app = await buildApp((filters) => listSourceOffers(database.db, filters));
+const app = await buildApp(
+  (filters) => listSourceOffers(database.db, filters),
+  () => checkDatabase(database.db),
+);
 app.addHook('onClose', () => database.close());
 for (const signal of ['SIGINT', 'SIGTERM'] as const)
   process.once(signal, () => {

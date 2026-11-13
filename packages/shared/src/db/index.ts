@@ -88,7 +88,7 @@ export async function listSourceOffers(db: Database, filters: OfferFilters, now 
   if (filters.maxPrice !== undefined) clauses.push(lte(table.reportedPrice, filters.maxPrice));
   if (filters.activeOn)
     clauses.push(lte(table.validFrom, filters.activeOn), gte(table.validTo, filters.activeOn));
-  else clauses.push(gte(table.validTo, warsawDate(now)));
+  else clauses.push(lte(table.validFrom, warsawDate(now)), gte(table.validTo, warsawDate(now)));
   if (filters.excludeAppOnly)
     clauses.push(
       sql`${table.payload}->>'requiresApp' = 'false' AND ${table.payload}->>'stale' = 'false'`,

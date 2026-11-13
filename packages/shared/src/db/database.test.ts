@@ -217,7 +217,7 @@ test('rolls back the whole save on a database constraint failure', async () => {
   expect(await actual.select().from(schema.scrapeRuns)).toHaveLength(1);
 });
 
-test('hides expired offers by default using the Warsaw date', async () => {
+test('shows only offers active today by default using the Warsaw date', async () => {
   await saveSourceOffers(
     db,
     [
@@ -232,9 +232,11 @@ test('hides expired offers by default using the Warsaw date', async () => {
     OfferFiltersSchema.parse({ sort: 'price' }),
     new Date('2026-11-10T23:30:00Z'),
   );
-  expect(result.items.map((item) => item.id).sort()).toEqual(['active', 'future']);
+  expect(result.items.map((item) => item.id).sort()).toEqual(['active']);
   const historical = await listSourceOffers(db, filters({ activeOn: '2026-11-10' }));
   expect(historical.items.map((item) => item.id).sort()).toEqual(['active', 'expired']);
+  const future = await listSourceOffers(db, filters({ activeOn: '2026-11-12' }));
+  expect(future.items.map((item) => item.id).sort()).toEqual(['active', 'future']);
 });
 
 test('groups matching images before pagination and keeps all source occurrences', async () => {
