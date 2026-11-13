@@ -14,12 +14,20 @@ services:
       interval: 5s
       retries: 10
 
+  migrate:
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-promo}:${POSTGRES_PASSWORD:-promo}@db:5432/${POSTGRES_DB:-promo}
+    command: ['node', 'packages/shared/dist/db/migrate.js']
+    depends_on:
+      db: { condition: service_healthy }
+
   api:
     build: { context: ., dockerfile: apps/api/Dockerfile }
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-promo}:${POSTGRES_PASSWORD:-promo}@db:5432/${POSTGRES_DB:-promo}
     depends_on:
-      db: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
     ports:
       - '3000:3000'
 

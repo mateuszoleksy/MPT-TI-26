@@ -16,9 +16,11 @@ async function main() {
       file: { type: 'string' },
       list: { type: 'boolean' },
       json: { type: 'boolean' },
+      persist: { type: 'boolean' },
     },
   });
   const store = StoreSchema.parse(args.store);
+  if (args.list && args.persist) throw new Error('--list cannot be persisted');
   if (args.list && (args.leaflet || args.file))
     throw new Error('--list cannot be combined with --leaflet or --file');
   if (args.file && !args.leaflet) throw new Error('--file requires --leaflet for source identity');
@@ -37,6 +39,15 @@ async function main() {
   ];
   const candidates = results.flatMap((result) => result.candidates);
   const failures = batch?.failures ?? [];
+  if (args.persist) {
+    const { connectDatabase, saveSourceOffers } = await import('@promo/shared/db');
+    const database = connectDatabase();
+    try {
+      await saveSourceOffers(database.db, candidates, { failures, pending: 0 });
+    } finally {
+      await database.close();
+    }
+  }
   if (args.json)
     console.log(
       JSON.stringify(

@@ -10,7 +10,7 @@
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --import tsx --test src/*.test.ts",
-    "offers:blix": "node --max-http-header-size=65536 --import tsx src/offers-blix.ts"
+    "offers:blix": "node --env-file-if-exists=../../.env --max-http-header-size=65536 --import tsx src/offers-blix.ts"
   },
   "dependencies": {
     "@promo/shared": "0.1.0",

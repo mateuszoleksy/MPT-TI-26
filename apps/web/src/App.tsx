@@ -1,65 +1,47 @@
-// Główny ekran demo. Uruchomienie: npm run dev:web (API musi działać).
-// Pobiera oferty z /api/offers, filtruje i sortuje je w przeglądarce, pokazuje jako kafelki.
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { discountPercent, type Offer } from '@promo/shared';
+import { detectedConditionLabels, warsawDate, type SourceOffer as Offer } from '@promo/shared';
 
-// Cena za kg / l / szt. Zwraca null, gdy oferta nie ma podanej jednostki
-// (wtedy kafelek pokazuje „brak danych”, a przy sortowaniu oferta trafia na koniec).
-function pricePerUnit(o: Offer): number | null {
-  if (!o.unit || !o.unitQuantity) return null;
-  return o.pricePromo / o.unitQuantity;
-}
-
-// 2.5 -> "2,50 zł" (polski zapis z przecinkiem).
 function formatPrice(value: number): string {
   return value.toFixed(2).replace('.', ',') + ' zł';
 }
 
-// "2026-11-12" -> "12.11".
 function formatDate(date: string): string {
   const [, month, day] = date.split('-');
   return `${day}.${month}`;
 }
 
 export function App() {
-  // Aktualne ustawienia filtrów wybrane przez użytkownika.
   const [search, setSearch] = useState('');
   const [store, setStore] = useState('all');
   const [maxPrice, setMaxPrice] = useState('');
   const [noApp, setNoApp] = useState(false);
   const [sort, setSort] = useState('price');
+  const [page, setPage] = useState(1);
+  const params = new URLSearchParams({ page: String(page), pageSize: '24', sort });
+  if (search) params.set('q', search);
+  if (store !== 'all') params.set('store', store);
+  if (maxPrice) params.set('maxPrice', maxPrice);
+  if (noApp) params.set('excludeAppOnly', 'true');
 
-  // Pobranie ofert z API. TanStack Query sam obsługuje stan ładowania i błędu.
   const { data, isLoading, error } = useQuery({
-    queryKey: ['offers'],
-    queryFn: async (): Promise<{ items: Offer[] }> => {
-      const res = await fetch('/api/offers');
+    queryKey: ['offers', params.toString()],
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+    queryFn: async (): Promise<{ items: Offer[]; total: number }> => {
+      const api = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
+      const res = await fetch(`${api}/api/offers?${params}`);
       if (!res.ok) throw new Error(`API error ${res.status}`);
       return res.json();
     },
   });
 
   if (isLoading) return <p style={{ padding: 16 }}>Ładowanie…</p>;
-  if (error) return <p style={{ padding: 16 }}>Błąd: {String(error)}</p>;
+  if (error && !data) return <p style={{ padding: 16 }}>Błąd: {String(error)}</p>;
 
-  // Dzisiejsza data w formacie RRRR-MM-DD, potrzebna do etykiety „od / do”.
-  const today = new Date().toISOString().slice(0, 10);
+  const today = warsawDate();
 
-  // Zostawiamy tylko oferty spełniające wszystkie wybrane filtry.
-  let offers = (data?.items ?? []).filter((o) => {
-    if (search && !o.name.toLowerCase().includes(search.toLowerCase())) return false;
-    if (store !== 'all' && o.store !== store) return false;
-    if (maxPrice && o.pricePromo > Number(maxPrice)) return false;
-    if (noApp && o.requiresApp) return false;
-    return true;
-  });
-
-  // Sortowanie rosnąco po cenie albo po cenie za kg/l (oferty bez jednostki na końcu).
-  offers = [...offers].sort((a, b) => {
-    if (sort === 'unit') return (pricePerUnit(a) ?? Infinity) - (pricePerUnit(b) ?? Infinity);
-    return a.pricePromo - b.pricePromo;
-  });
+  const offers = data?.items ?? [];
 
   return (
     <main style={{ fontFamily: 'system-ui', maxWidth: 960, margin: '0 auto', padding: 16 }}>
@@ -70,9 +52,18 @@ export function App() {
         <input
           placeholder="Szukaj, np. kawa"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(1);
+          }}
         />
-        <select value={store} onChange={(e) => setStore(e.target.value)}>
+        <select
+          value={store}
+          onChange={(e) => {
+            setStore(e.target.value);
+            setPage(1);
+          }}
+        >
           <option value="all">Oba sklepy</option>
           <option value="biedronka">Biedronka</option>
           <option value="lidl">Lidl</option>
@@ -83,21 +74,50 @@ export function App() {
             type="number"
             style={{ width: 70 }}
             value={maxPrice}
-            onChange={(e) => setMaxPrice(e.target.value)}
+            onChange={(e) => {
+              setMaxPrice(e.target.value);
+              setPage(1);
+            }}
           />{' '}
           zł
         </label>
         <label>
-          <input type="checkbox" checked={noApp} onChange={(e) => setNoApp(e.target.checked)} /> Bez
-          aplikacji
+          <input
+            type="checkbox"
+            checked={noApp}
+            onChange={(e) => {
+              setNoApp(e.target.checked);
+              setPage(1);
+            }}
+          />{' '}
+          Bez aplikacji
         </label>
-        <select value={sort} onChange={(e) => setSort(e.target.value)}>
+        <select
+          value={sort}
+          onChange={(e) => {
+            setSort(e.target.value);
+            setPage(1);
+          }}
+        >
           <option value="price">Sortuj: najniższa cena</option>
-          <option value="unit">Sortuj: cena za kg / l</option>
+          <option value="validTo">Sortuj: koniec oferty</option>
         </select>
       </div>
 
-      <p>Znaleziono: {offers.length}</p>
+      {error && <p>Nie udało się odświeżyć ofert. Pokazano poprzednie dane.</p>}
+      <p>Znaleziono: {data?.total ?? 0}</p>
+      {noApp && data?.total === 0 && <p>Brak ofert z potwierdzonym brakiem wymogu aplikacji.</p>}
+      <p>Dane pochodzą z gazetek. Sprawdź warunki przed zakupem.</p>
+      {offers.some((offer) => offer.recheckDue) && (
+        <p>Część danych oczekuje na ponowne sprawdzenie źródła.</p>
+      )}
+      <button disabled={page === 1} onClick={() => setPage(page - 1)}>
+        Poprzednia
+      </button>
+      <span> Strona {page} </span>
+      <button disabled={page * 24 >= (data?.total ?? 0)} onClick={() => setPage(page + 1)}>
+        Następna
+      </button>
 
       {/* Siatka kafelków: tyle kolumn, ile się zmieści (min. 160 px), na telefonie jedna. */}
       <div
@@ -108,28 +128,70 @@ export function App() {
         }}
       >
         {offers.map((o) => {
-          const discount = discountPercent(o);
-          const perUnit = pricePerUnit(o);
+          const labels = detectedConditionLabels(o);
+          const priceSuffix = o.priceQuantity
+            ? ` / ${new Intl.NumberFormat('pl-PL').format(o.priceQuantity.amount < 1 ? o.priceQuantity.amount * 1000 : o.priceQuantity.amount)} ${o.priceQuantity.amount < 1 ? (o.priceQuantity.unit === 'kg' ? 'g' : 'ml') : o.priceQuantity.unit}`
+            : '';
           return (
-            // Kafelek jednej oferty
             <div key={o.id} style={{ border: '1px solid #ccc', borderRadius: 8, padding: 10 }}>
               <b style={{ color: o.store === 'lidl' ? '#0050aa' : '#e30613' }}>
                 {o.store === 'lidl' ? 'Lidl' : 'Biedronka'}
               </b>
               <p style={{ margin: '6px 0' }}>{o.name}</p>
+              {o.unitQuantity !== null &&
+                o.unitQuantity > 0 &&
+                (o.unit === 'kg' || o.unit === 'l' || o.unit === 'szt') && (
+                  <small>
+                    Ilość:{' '}
+                    {new Intl.NumberFormat('pl-PL', { maximumFractionDigits: 6 }).format(
+                      o.unit !== 'szt' && o.unitQuantity < 1
+                        ? o.unitQuantity * 1000
+                        : o.unitQuantity,
+                    )}{' '}
+                    {o.unit !== 'szt' && o.unitQuantity < 1
+                      ? o.unit === 'kg'
+                        ? 'g'
+                        : 'ml'
+                      : o.unit}
+                  </small>
+                )}
               <p style={{ margin: 0, fontSize: 20, fontWeight: 'bold' }}>
-                {formatPrice(o.pricePromo)}
+                {formatPrice(o.reportedPrice)}
+                {priceSuffix}
               </p>
-              {o.priceRegular && (
-                <p style={{ margin: 0, color: '#888' }}>
-                  <s>{formatPrice(o.priceRegular)}</s> {discount !== null && `(-${discount}%)`}
+              {o.priceRegular !== null && o.priceRegular > o.reportedPrice && (
+                <p style={{ margin: 0, color: '#666' }}>
+                  Cena regularna:{' '}
+                  <s>
+                    {formatPrice(o.priceRegular)}
+                    {priceSuffix}
+                  </s>
                 </p>
               )}
-              <p style={{ margin: '4px 0', color: perUnit ? 'green' : '#aaa' }}>
-                {perUnit ? `${formatPrice(perUnit)}/${o.unit}` : 'cena/kg: brak danych'}
+              {o.pricePrevious != null && o.pricePrevious > o.reportedPrice && (
+                <p style={{ margin: 0, color: '#666' }}>
+                  Poprzednia cena: <s>{formatPrice(o.pricePrevious)}</s>
+                </p>
+              )}
+              {labels.length === 0 && o.offerKind !== 'price-reduction' && (
+                <p style={{ margin: '4px 0' }}>Warunki ceny nieustalone. Sprawdź gazetkę.</p>
+              )}
+              {labels.map((label) => (
+                <p key={label} style={{ margin: 0 }}>
+                  {label}
+                </p>
+              ))}
+              {o.stale && <p>Dane nie zostały odświeżone</p>}
+              <p>
+                {(o.sources ?? [{ id: o.id, sourceUrl: o.sourceUrl }]).map((source, index) => (
+                  <span key={source.id}>
+                    {index > 0 && ' · '}
+                    <a href={source.sourceUrl} target="_blank" rel="noreferrer">
+                      {(o.sources?.length ?? 0) > 1 ? `Źródło ${index + 1}` : 'Sprawdź źródło'}
+                    </a>
+                  </span>
+                ))}
               </p>
-              {o.requiresApp && <p style={{ margin: 0 }}>📱 z aplikacją</p>}
-              {o.conditions && !o.requiresApp && <p style={{ margin: 0 }}>{o.conditions}</p>}
               <small>
                 {o.validFrom > today
                   ? `od ${formatDate(o.validFrom)}`
