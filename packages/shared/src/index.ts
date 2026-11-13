@@ -1,4 +1,6 @@
 import { z } from 'zod';
+export { calculateUnitPrice, compareUnitPrices } from './unit-price.js';
+export type { StandardUnit, Unit, UnitPrice } from './unit-price.js';
 
 export const StoreSchema = z.enum(['biedronka', 'lidl']);
 export type Store = z.infer<typeof StoreSchema>;
