@@ -7,7 +7,7 @@ try {
   await migrate(database.db, {
     migrationsFolder: fileURLToPath(new URL('../../migrations', import.meta.url)),
   });
-  console.log('Database migrations applied');
+  console.info('Database migrations applied');
 } finally {
   await database.close();
 }
