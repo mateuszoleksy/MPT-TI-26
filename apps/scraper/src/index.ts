@@ -28,7 +28,7 @@ async function runAll(): Promise<boolean> {
     try {
       const batch = await fetchCurrentBlixCandidates(store);
       // TODO: store candidates once the database layer exists; they still need review
-      console.log(
+      console.info(
         `[blix:${store}] ${batch.candidates.length} candidates from ${batch.results.length}/${batch.leaflets.length} leaflets in ${Date.now() - started} ms`,
       );
       for (const failure of batch.failures) {
