@@ -3,6 +3,7 @@ import { OfferSchema, StoreSchema } from '@promo/shared';
 import { biedronkaAdapter } from './adapters/biedronka.js';
 import { fetchCurrentBlixCandidates } from './adapters/blix.js';
 import { lidlAdapter } from './adapters/lidl.js';
+import { scheduleJob } from './scheduler.js';
 
 const adapters = [biedronkaAdapter, lidlAdapter];
 
@@ -49,14 +50,14 @@ if (process.argv.includes('--once')) {
   const schedule = process.env.SCRAPE_CRON ?? '0 6 * * *';
   const timezone = process.env.SCRAPE_TZ ?? 'Europe/Warsaw';
   if (!cron.validate(schedule)) throw new Error(`Invalid SCRAPE_CRON: "${schedule}"`);
-  const task = cron.schedule(schedule, runAll, { name: 'scrape', timezone, noOverlap: true });
+  const job = scheduleJob(schedule, runAll, { name: 'scrape', timezone, noOverlap: true });
   console.info(
-    `Scraper scheduled: "${schedule}" (${timezone}), next run ${task.getNextRun()?.toISOString()}`,
+    `Scraper scheduled: "${schedule}" (${timezone}), next run ${job.task.getNextRun()?.toISOString()}`,
   );
   for (const signal of ['SIGINT', 'SIGTERM'] as const)
     process.once(signal, async () => {
       console.info(`${signal} received, stopping scheduler`);
-      await cron.shutdown();
+      await job.stop();
       process.exit(0);
     });
 }
