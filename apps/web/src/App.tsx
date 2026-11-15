@@ -1,6 +1,6 @@
 // Główny ekran demo. Uruchomienie: npm run dev:web (API musi działać).
 // Pobiera oferty z /api/offers, filtruje i sortuje je w przeglądarce, pokazuje jako kafelki.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { discountPercent, type Offer } from '@promo/shared';
 
@@ -22,13 +22,33 @@ function formatDate(date: string): string {
   return `${day}.${month}`;
 }
 
+// Filters are stored in the page URL, e.g. ?q=kawa&store=lidl&maxPrice=20&excludeAppOnly=true
+const urlParams = () => new URLSearchParams(window.location.search);
+
 export function App() {
-  // Aktualne ustawienia filtrów wybrane przez użytkownika.
-  const [search, setSearch] = useState('');
-  const [store, setStore] = useState('all');
-  const [maxPrice, setMaxPrice] = useState('');
-  const [noApp, setNoApp] = useState(false);
-  const [sort, setSort] = useState('price');
+  const [search, setSearch] = useState(() => urlParams().get('q') ?? '');
+  const [store, setStore] = useState(() => {
+    const value = urlParams().get('store');
+    return value === 'biedronka' || value === 'lidl' ? value : 'all';
+  });
+  const [maxPrice, setMaxPrice] = useState(() => urlParams().get('maxPrice') ?? '');
+  const [noApp, setNoApp] = useState(() => urlParams().get('excludeAppOnly') === 'true');
+  const [sort, setSort] = useState(() =>
+    urlParams().get('sort') === 'pricePerUnit' ? 'unit' : 'price',
+  );
+
+  // Update the URL whenever a filter changes (no reload, no new history entries).
+  // Default values are omitted to keep the link short.
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (search) params.set('q', search);
+    if (store !== 'all') params.set('store', store);
+    if (maxPrice) params.set('maxPrice', maxPrice);
+    if (noApp) params.set('excludeAppOnly', 'true');
+    if (sort === 'unit') params.set('sort', 'pricePerUnit');
+    const query = params.toString();
+    window.history.replaceState(null, '', query ? `?${query}` : window.location.pathname);
+  }, [search, store, maxPrice, noApp, sort]);
 
   // Pobranie ofert z API. TanStack Query sam obsługuje stan ładowania i błędu.
   const { data, isLoading, error } = useQuery({
