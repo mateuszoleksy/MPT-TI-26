@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { afterEach, test, vi } from 'vitest';
 import { scheduleJob } from './scheduler.js';
 
-test('stop waits for the active run however long it takes', async (t) => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
+afterEach(() => vi.useRealTimers());
+
+test('stop waits for the active run however long it takes', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout'] });
   let finish!: () => void;
   let finished = false;
   const job = scheduleJob('0 6 * * *', async () => {
@@ -16,7 +18,7 @@ test('stop waits for the active run however long it takes', async (t) => {
   let stopped = false;
   const stopping = job.stop().then(() => (stopped = true));
   // Past node-cron's 5 s shutdown timeout, which is what used to let the process exit early.
-  t.mock.timers.tick(60_000);
+  vi.advanceTimersByTime(60_000);
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(stopped, false);
 

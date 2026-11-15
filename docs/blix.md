@@ -1,25 +1,21 @@
 # Blix scraper
 
-Fetches active Lidl and Biedronka leaflets automatically, using dates in Warsaw.
+Run from the repository root after [database setup](integration.md):
 
 ```sh
-npm run build -w @promo/shared
-npm run offers:blix -- --store lidl
-npm run offers:blix -- --store biedronka
+npm run offers:blix -- --store lidl --list            # list leaflets and dates
+npm run offers:blix -- --store lidl --persist         # import active Lidl leaflets
+npm run offers:blix -- --store biedronka --persist    # import active Biedronka leaflets
 ```
 
-Use `--list` for leaflet titles and dates, or `--json` for all records. The table shows 20 products.
-
-Prices and conditions remain unverified; `requiresApp: null` means unknown. Failed leaflets are reported separately, with exit code 1 even if other leaflets succeeded.
-
-`offers:blix` runs once per command. The scraper worker also scrapes both stores on a schedule:
+Imports update existing occurrences. `--json` prints all records; the table shows only 20.
+Failed leaflets produce a nonzero exit code while successful results are kept. Missing conditions remain unknown.
 
 ```sh
-npm run dev:scraper                        # scheduler, SCRAPE_CRON (default 0 6 * * *) in SCRAPE_TZ (default Europe/Warsaw)
-npm run scrape:once -w @promo/scraper      # single run, exit code 1 on any failure
-SCRAPE_CRON='*/5 * * * *' npm run dev:scraper   # quick local check
+npm run dev:scraper                     # schedule in SCRAPE_TZ (default Europe/Warsaw)
+npm run scrape:once -w @promo/scraper    # fetch once without saving; nonzero on partial failure
 ```
 
-In docker compose the `scraper` service runs the scheduler and reads both variables from `.env`. Overlapping runs are skipped. On SIGTERM the worker finishes the current run before exiting; compose allows it 2 minutes (`stop_grace_period`) before killing it. Database writes and API integration are not connected yet.
-
+The scheduled worker currently logs results only. Use `offers:blix --persist` to save data; scheduled database writes remain to be connected.
+Compose restarts the worker unless stopped and allows 2 minutes to finish an active run. `SCRAPE_CRON` defaults to `0 6 * * *`.
 Tests: `npm run test -w @promo/scraper`.

@@ -19,7 +19,8 @@
     "format": "prettier --write .",
     "test": "npm run test --workspaces --if-present",
     "format:check": "prettier --check .",
-    "offers:blix": "npm run offers:blix -w @promo/scraper --"
+    "offers:blix": "npm run offers:blix -w @promo/scraper --",
+    "db:migrate": "node --env-file-if-exists=.env --import tsx packages/shared/src/db/migrate.ts"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",
