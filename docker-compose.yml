@@ -28,8 +28,11 @@ services:
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-promo}:${POSTGRES_PASSWORD:-promo}@db:5432/${POSTGRES_DB:-promo}
       SCRAPE_CRON: ${SCRAPE_CRON:-0 6 * * *}
+      SCRAPE_TZ: ${SCRAPE_TZ:-Europe/Warsaw}
     depends_on:
       db: { condition: service_healthy }
+    restart: unless-stopped
+    stop_grace_period: 2m
 
   web:
     build: { context: ., dockerfile: apps/web/Dockerfile }
