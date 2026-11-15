@@ -32,6 +32,7 @@ services:
     depends_on:
       db: { condition: service_healthy }
     restart: unless-stopped
+    stop_grace_period: 2m
 
   web:
     build: { context: ., dockerfile: apps/web/Dockerfile }

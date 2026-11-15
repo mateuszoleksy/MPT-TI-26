@@ -20,6 +20,6 @@ npm run scrape:once -w @promo/scraper      # single run, exit code 1 on any fail
 SCRAPE_CRON='*/5 * * * *' npm run dev:scraper   # quick local check
 ```
 
-In docker compose the `scraper` service runs the scheduler and reads both variables from `.env`. Overlapping runs are skipped. Database writes and API integration are not connected yet.
+In docker compose the `scraper` service runs the scheduler and reads both variables from `.env`. Overlapping runs are skipped. On SIGTERM the worker finishes the current run before exiting; compose allows it 2 minutes (`stop_grace_period`) before killing it. Database writes and API integration are not connected yet.
 
 Tests: `npm run test -w @promo/scraper`.
