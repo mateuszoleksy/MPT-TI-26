@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'vitest';
+import { test, vi } from 'vitest';
 import { createElement } from 'react';
 import { renderToString } from 'react-dom/server';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -121,3 +121,29 @@ test('renders source prices and detected conditions with a warning', () => {
   assert.ok(!reduction.includes('Warunki ceny nieustalone'));
   client.clear();
 });
+
+for (const [search, key, total] of [
+  [
+    '?q=kawa&store=lidl&maxPrice=20&excludeAppOnly=true&sort=validTo&page=2',
+    'page=2&pageSize=24&sort=validTo&q=kawa&store=lidl&maxPrice=20&excludeAppOnly=true',
+    49,
+  ],
+  ['?store=unknown&maxPrice=-5&sort=pricePerUnit&page=1.5', 'page=1&pageSize=24&sort=price', 7],
+] as const) {
+  test(`restores safe API filters from URL: ${search}`, () => {
+    vi.stubGlobal('window', { location: { search } });
+    const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } });
+    try {
+      client.setQueryData(['offers', key], { items: [], total });
+      const html = renderToString(
+        createElement(QueryClientProvider, { client }, createElement(App)),
+      ).replace(/<!--.*?-->/g, '');
+      assert.ok(html.includes(`Znaleziono: ${total}`));
+      assert.ok(html.includes(`Strona ${total === 49 ? 2 : 1}`));
+      assert.ok(!html.includes('value="-5"'));
+    } finally {
+      client.clear();
+      vi.unstubAllGlobals();
+    }
+  });
+}

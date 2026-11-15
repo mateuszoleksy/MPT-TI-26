@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { detectedConditionLabels, warsawDate, type SourceOffer as Offer } from '@promo/shared';
 
@@ -11,18 +11,52 @@ function formatDate(date: string): string {
   return `${day}.${month}`;
 }
 
+// Filters are stored in the page URL, e.g. ?q=kawa&store=lidl&maxPrice=20&excludeAppOnly=true
+const urlParams = () =>
+  new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search);
+
 export function App() {
-  const [search, setSearch] = useState('');
-  const [store, setStore] = useState('all');
-  const [maxPrice, setMaxPrice] = useState('');
-  const [noApp, setNoApp] = useState(false);
-  const [sort, setSort] = useState('price');
-  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState(() => urlParams().get('q') ?? '');
+  const [store, setStore] = useState(() => {
+    const value = urlParams().get('store');
+    return value === 'biedronka' || value === 'lidl' ? value : 'all';
+  });
+  const [maxPrice, setMaxPrice] = useState(() => {
+    const value = urlParams().get('maxPrice') ?? '';
+    return value.trim() && Number.isFinite(Number(value)) && Number(value) >= 0 ? value : '';
+  });
+  const [noApp, setNoApp] = useState(() => urlParams().get('excludeAppOnly') === 'true');
+  const [sort, setSort] = useState(() =>
+    urlParams().get('sort') === 'validTo' ? 'validTo' : 'price',
+  );
+
+  const [page, setPage] = useState(() => {
+    const value = Number(urlParams().get('page'));
+    return Number.isSafeInteger(value) && value > 0 ? value : 1;
+  });
   const params = new URLSearchParams({ page: String(page), pageSize: '24', sort });
   if (search) params.set('q', search);
   if (store !== 'all') params.set('store', store);
   if (maxPrice) params.set('maxPrice', maxPrice);
   if (noApp) params.set('excludeAppOnly', 'true');
+
+  // Update the URL whenever a filter changes (no reload, no new history entries).
+  // Default values are omitted to keep the link short.
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (search) params.set('q', search);
+    if (store !== 'all') params.set('store', store);
+    if (maxPrice) params.set('maxPrice', maxPrice);
+    if (noApp) params.set('excludeAppOnly', 'true');
+    if (sort !== 'price') params.set('sort', sort);
+    if (page !== 1) params.set('page', String(page));
+    const query = params.toString();
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`,
+    );
+  }, [search, store, maxPrice, noApp, sort, page]);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['offers', params.toString()],
