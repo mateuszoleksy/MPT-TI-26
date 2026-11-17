@@ -155,3 +155,5 @@ export function warsawDate(now = new Date()): string {
   const get = (type: string) => parts.find((part) => part.type === type)!.value;
   return `${get('year')}-${get('month')}-${get('day')}`;
 }
+
+export * from './promotionDates.js';

@@ -3,8 +3,25 @@ import { test, vi } from 'vitest';
 import { createElement } from 'react';
 import { renderToString } from 'react-dom/server';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { SourceOfferSchema } from '@promo/shared';
+import { SourceOfferSchema, warsawDate } from '@promo/shared';
 import { App } from './App.js';
+
+// The application includes activeOn in every API query.
+// Preserve the exact parameter order used by App.tsx.
+function withSelectedDate(key: string, date = warsawDate()): string {
+  const [page, pageSize, sort, ...filters] = key.split('&');
+  return [page, pageSize, sort, `activeOn=${date}`, ...filters].join('&');
+}
+
+function createTestClient() {
+  return new QueryClient({
+    defaultOptions: { queries: { staleTime: Infinity } },
+  });
+}
+
+function renderApp(client: QueryClient): string {
+  return renderToString(createElement(QueryClientProvider, { client }, createElement(App)));
+}
 
 test('renders source prices and detected conditions with a warning', () => {
   const item = SourceOfferSchema.parse({
@@ -31,12 +48,26 @@ test('renders source prices and detected conditions with a warning', () => {
       requiresApp: { value: null },
       loyalty: { value: null },
       couponActivation: { value: null },
-      multiBuy: { value: { kind: 'quantity-discount', quantity: 3, percent: 26 } },
+      multiBuy: {
+        value: {
+          kind: 'quantity-discount',
+          quantity: 3,
+          percent: 26,
+        },
+      },
     },
   });
-  const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } });
-  client.setQueryData(['offers', 'page=1&pageSize=24&sort=price'], { items: [item], total: 25 });
-  const html = renderToString(createElement(QueryClientProvider, { client }, createElement(App)));
+
+  const client = createTestClient();
+  const queryKey = ['offers', withSelectedDate('page=1&pageSize=24&sort=price')];
+
+  client.setQueryData(queryKey, {
+    items: [item],
+    total: 25,
+  });
+
+  const html = renderApp(client);
+
   assert.ok(html.includes('Test product'));
   assert.ok(html.includes('5,49 zł'));
   assert.ok(html.includes('26% taniej przy zakupie 3 szt.'));
@@ -47,32 +78,52 @@ test('renders source prices and detected conditions with a warning', () => {
   assert.ok(html.includes('200'));
   assert.ok(html.includes('<s>6,99 zł</s>'));
   assert.ok(html.includes(item.sourceUrl));
+
+  // Verify that cached data remains visible after an API error.
   client
     .getQueryCache()
-    .find({ queryKey: ['offers', 'page=1&pageSize=24&sort=price'] })!
-    .setState({ status: 'error', error: new Error('offline') });
-  const cached = renderToString(createElement(QueryClientProvider, { client }, createElement(App)));
+    .find({ queryKey })!
+    .setState({
+      status: 'error',
+      error: new Error('offline'),
+    });
+
+  const cached = renderApp(client);
+
   assert.ok(cached.includes('Test product'));
   assert.ok(cached.includes('Pokazano poprzednie dane'));
-  client.setQueryData(['offers', 'page=1&pageSize=24&sort=price'], {
+
+  // Unit quantity displayed in pieces.
+  client.setQueryData(queryKey, {
     items: [{ ...item, unit: 'szt', unitQuantity: 20 }],
     total: 1,
   });
-  const pieces = renderToString(
-    createElement(QueryClientProvider, { client }, createElement(App)),
-  ).replace(/<!--.*?-->/g, '');
+
+  const pieces = renderApp(client).replace(/<!--.*?-->/g, '');
+
   assert.ok(pieces.includes('Ilość: 20 szt'));
-  client.setQueryData(['offers', 'page=1&pageSize=24&sort=price'], {
-    items: [{ ...item, reportedPrice: 0.59, priceRegular: 0.59, pricePrevious: 0.7 }],
+
+  // Previous price must be distinct from regular price.
+  client.setQueryData(queryKey, {
+    items: [
+      {
+        ...item,
+        reportedPrice: 0.59,
+        priceRegular: 0.59,
+        pricePrevious: 0.7,
+      },
+    ],
     total: 1,
   });
-  const changed = renderToString(
-    createElement(QueryClientProvider, { client }, createElement(App)),
-  );
+
+  const changed = renderApp(client);
+
   assert.ok(changed.includes('Poprzednia cena:'));
   assert.ok(changed.includes('<s>0,70 zł</s>'));
   assert.ok(!changed.includes('Cena regularna:'));
-  client.setQueryData(['offers', 'page=1&pageSize=24&sort=price'], {
+
+  // Price per quantity.
+  client.setQueryData(queryKey, {
     items: [
       {
         ...item,
@@ -85,13 +136,15 @@ test('renders source prices and detected conditions with a warning', () => {
     ],
     total: 1,
   });
-  const deli = renderToString(
-    createElement(QueryClientProvider, { client }, createElement(App)),
-  ).replace(/<!--.*?-->/g, '');
+
+  const deli = renderApp(client).replace(/<!--.*?-->/g, '');
+
   assert.ok(deli.includes('1,79 zł / 100 g'));
   assert.ok(deli.includes('<s>2,19 zł / 100 g</s>'));
   assert.ok(!deli.includes('Ilość:'));
-  client.setQueryData(['offers', 'page=1&pageSize=24&sort=price'], {
+
+  // Unknown conditions.
+  client.setQueryData(queryKey, {
     items: [
       {
         ...item,
@@ -106,19 +159,27 @@ test('renders source prices and detected conditions with a warning', () => {
     ],
     total: 1,
   });
-  const unknown = renderToString(
-    createElement(QueryClientProvider, { client }, createElement(App)),
-  );
+
+  const unknown = renderApp(client);
+
   assert.ok(unknown.includes('Warunki ceny nieustalone'));
   assert.ok(unknown.includes('0,20 zł'));
-  client.setQueryData(['offers', 'page=1&pageSize=24&sort=price'], {
-    items: [{ ...item, promotion: undefined, offerKind: 'price-reduction' }],
+
+  client.setQueryData(queryKey, {
+    items: [
+      {
+        ...item,
+        promotion: undefined,
+        offerKind: 'price-reduction',
+      },
+    ],
     total: 1,
   });
-  const reduction = renderToString(
-    createElement(QueryClientProvider, { client }, createElement(App)),
-  );
+
+  const reduction = renderApp(client);
+
   assert.ok(!reduction.includes('Warunki ceny nieustalone'));
+
   client.clear();
 });
 
@@ -131,13 +192,22 @@ for (const [search, key, total] of [
   ['?store=unknown&maxPrice=-5&sort=pricePerUnit&page=1.5', 'page=1&pageSize=24&sort=price', 7],
 ] as const) {
   test(`restores safe API filters from URL: ${search}`, () => {
-    vi.stubGlobal('window', { location: { search } });
-    const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } });
+    vi.stubGlobal('window', {
+      location: { search },
+    });
+
+    const client = createTestClient();
+
     try {
-      client.setQueryData(['offers', key], { items: [], total });
-      const html = renderToString(
-        createElement(QueryClientProvider, { client }, createElement(App)),
-      ).replace(/<!--.*?-->/g, '');
+      const queryKey = ['offers', withSelectedDate(key)];
+
+      client.setQueryData(queryKey, {
+        items: [],
+        total,
+      });
+
+      const html = renderApp(client).replace(/<!--.*?-->/g, '');
+
       assert.ok(html.includes(`Znaleziono: ${total}`));
       assert.ok(html.includes(`Strona ${total === 49 ? 2 : 1}`));
       assert.ok(!html.includes('value="-5"'));
@@ -147,3 +217,32 @@ for (const [search, key, total] of [
     }
   });
 }
+
+test('uses selected promotion date in API query', () => {
+  const selectedDate = '2026-11-11';
+
+  vi.stubGlobal('window', {
+    location: {
+      search: `?activeOn=${selectedDate}`,
+    },
+  });
+
+  const client = createTestClient();
+
+  try {
+    const queryKey = ['offers', withSelectedDate('page=1&pageSize=24&sort=price', selectedDate)];
+
+    client.setQueryData(queryKey, {
+      items: [],
+      total: 3,
+    });
+
+    const html = renderApp(client).replace(/<!--.*?-->/g, '');
+
+    assert.ok(html.includes('Znaleziono: 3'));
+    assert.ok(html.includes('value="2026-11-11"'));
+  } finally {
+    client.clear();
+    vi.unstubAllGlobals();
+  }
+});
