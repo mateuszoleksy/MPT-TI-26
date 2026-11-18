@@ -22,6 +22,11 @@ describe('OfferFiltersSchema', () => {
     expect(f).toMatchObject({ maxPrice: 5, sort: 'discount', page: 1, pageSize: 24 });
   });
 
+  it('trims product search and treats whitespace only queries as absent', () => {
+    expect(OfferFiltersSchema.parse({ q: '  kawa  ' }).q).toBe('kawa');
+    expect(OfferFiltersSchema.parse({ q: '   ' }).q).toBeUndefined();
+  });
+
   it('rejects unknown stores and sort keys', () => {
     expect(OfferFiltersSchema.safeParse({ store: 'zabka' }).success).toBe(false);
     expect(OfferFiltersSchema.safeParse({ sort: 'bogus' }).success).toBe(false);
