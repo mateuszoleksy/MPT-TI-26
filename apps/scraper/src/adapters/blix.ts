@@ -10,7 +10,7 @@ import {
 async function fetchHtml(url: string): Promise<string> {
   const response = await fetch(url, {
     redirect: 'error',
-    signal: AbortSignal.timeout(20_000),
+    signal: AbortSignal.timeout(15_000),
     headers: { 'User-Agent': 'PromoStudentCourse/0.1', 'Accept-Language': 'pl-PL,pl;q=0.9' },
   });
   if (!response.ok) throw new Error(`Blix returned HTTP ${response.status}`);
@@ -57,14 +57,21 @@ export async function fetchCurrentBlixCandidates(store: Store, onDate = todayInW
   const results = [];
   const failures: { leafletId: string; message: string }[] = [];
   for (const leaflet of leaflets) {
+    console.info(`[blix:${store}] Pobieram gazetkę ${leaflet.id}...`);
     await setTimeout(2000);
     try {
-      results.push(await fetchBlixCandidates(store, leaflet.id));
+      const result = await fetchBlixCandidates(store, leaflet.id);
+      results.push(result);
+      console.info(
+        `[blix:${store}] Sparsowano ${result.candidates.length} ofert z gazetki ${leaflet.id}.`,
+      );
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       failures.push({
         leafletId: leaflet.id,
-        message: error instanceof Error ? error.message : String(error),
+        message,
       });
+      console.error(`[blix:${store}] Nie udało się pobrać gazetki ${leaflet.id}: ${message}`);
     }
   }
   if (!results.length)
