@@ -190,9 +190,9 @@ test('trims search phrases and matches product names without case sensitivity', 
     failures: [],
     pending: 0,
   });
-  expect((await listSourceOffers(db, filters({ q: '  arabica  ' }))).items.map((item) => item.id)).toEqual(
-    ['a'],
-  );
+  expect(
+    (await listSourceOffers(db, filters({ q: '  arabica  ' }))).items.map((item) => item.id),
+  ).toEqual(['a']);
   expect((await listSourceOffers(db, filters({ q: '   ' }))).total).toBe(1);
 });
 

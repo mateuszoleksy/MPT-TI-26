@@ -255,7 +255,9 @@ test('keeps search input focused while typing and debounces API and URL updates'
     url: 'http://localhost/',
   });
   const fetchMock = vi.fn(() => new Promise<Response>(() => {}));
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: Infinity } },
+  });
   const container = dom.window.document.getElementById('root')!;
   let unmount: (() => void) | undefined;
 
@@ -273,7 +275,9 @@ test('keeps search input focused while typing and debounces API and URL updates'
       root.render(createElement(QueryClientProvider, { client }, createElement(App)));
     });
 
-    const input = container.querySelector<HTMLInputElement>('input[placeholder="Szukaj, np. kawa"]')!;
+    const input = container.querySelector<HTMLInputElement>(
+      'input[placeholder="Szukaj, np. kawa"]',
+    )!;
     await act(async () => {
       input.focus();
       for (const value of ['k', 'ka', 'kaw', 'kawa']) {
