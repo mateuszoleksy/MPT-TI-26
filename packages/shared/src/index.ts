@@ -70,7 +70,10 @@ const oneOrMany = <T extends z.ZodTypeAny>(item: T) =>
 
 /** Query parameters accepted by GET /api/offers. */
 export const OfferFiltersSchema = z.object({
-  q: z.string().optional(),
+  q: z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z.string().trim().optional(),
+  ),
   store: oneOrMany(StoreSchema).optional(),
   category: oneOrMany(z.string()).optional(),
   maxPrice: z.coerce.number().optional(),

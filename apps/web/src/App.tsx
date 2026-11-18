@@ -23,6 +23,12 @@ function initialDate(): string {
 
 export function App() {
   const [search, setSearch] = useState(() => urlParams().get('q') ?? '');
+  const [debouncedSearch, setDebouncedSearch] = useState(search);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedSearch(search), 300);
+    return () => window.clearTimeout(timeout);
+  }, [search]);
 
   const [store, setStore] = useState(() => {
     const value = urlParams().get('store');
@@ -54,7 +60,7 @@ export function App() {
     activeOn: selectedDate,
   });
 
-  if (search) params.set('q', search);
+  if (debouncedSearch.trim()) params.set('q', debouncedSearch.trim());
   if (store !== 'all') params.set('store', store);
   if (maxPrice) params.set('maxPrice', maxPrice);
   if (noApp) params.set('excludeAppOnly', 'true');
@@ -63,7 +69,7 @@ export function App() {
   useEffect(() => {
     const params = new URLSearchParams();
 
-    if (search) params.set('q', search);
+    if (debouncedSearch.trim()) params.set('q', debouncedSearch.trim());
     if (store !== 'all') params.set('store', store);
     if (maxPrice) params.set('maxPrice', maxPrice);
     if (noApp) params.set('excludeAppOnly', 'true');
@@ -80,7 +86,7 @@ export function App() {
       '',
       `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`,
     );
-  }, [search, store, maxPrice, noApp, sort, selectedDate, page]);
+  }, [debouncedSearch, store, maxPrice, noApp, sort, selectedDate, page]);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['offers', params.toString()],
@@ -96,12 +102,6 @@ export function App() {
       return res.json();
     },
   });
-
-  if (isLoading) return <p style={{ padding: 16 }}>Ładowanie…</p>;
-
-  if (error && !data) {
-    return <p style={{ padding: 16 }}>Błąd: {String(error)}</p>;
-  }
 
   const offers = data?.items ?? [];
 
@@ -231,7 +231,15 @@ export function App() {
         </div>
       </fieldset>
 
-      {error && <p>Nie udało się odświeżyć ofert. Pokazano poprzednie dane.</p>}
+      {isLoading && <p role="status">Ładowanie…</p>}
+
+      {error && (
+        <p>
+          {data
+            ? 'Nie udało się odświeżyć ofert. Pokazano poprzednie dane.'
+            : `Błąd: ${String(error)}`}
+        </p>
+      )}
 
       <p>Znaleziono: {data?.total ?? 0}</p>
 

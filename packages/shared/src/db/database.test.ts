@@ -185,6 +185,17 @@ test('treats wildcard characters in search literally', async () => {
   );
 });
 
+test('trims search phrases and matches product names without case sensitivity', async () => {
+  await saveSourceOffers(db, [row('a', 'lidl', 5, 'Kawa Arabica')], {
+    failures: [],
+    pending: 0,
+  });
+  expect(
+    (await listSourceOffers(db, filters({ q: '  arabica  ' }))).items.map((item) => item.id),
+  ).toEqual(['a']);
+  expect((await listSourceOffers(db, filters({ q: '   ' }))).total).toBe(1);
+});
+
 test('formats detected conditions without marking them verified', () => {
   const value = {
     ...row('a'),

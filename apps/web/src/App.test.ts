@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { test, vi } from 'vitest';
-import { createElement } from 'react';
+import { act, createElement } from 'react';
 import { renderToString } from 'react-dom/server';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { JSDOM } from 'jsdom';
 import { SourceOfferSchema, warsawDate } from '@promo/shared';
 import { App } from './App.js';
 
@@ -189,6 +190,8 @@ for (const [search, key, total] of [
     'page=2&pageSize=24&sort=validTo&q=kawa&store=lidl&maxPrice=20&excludeAppOnly=true',
     49,
   ],
+  ['?q=%20%20kawa%20%20', 'page=1&pageSize=24&sort=price&q=kawa', 8],
+  ['?q=%20%20%20', 'page=1&pageSize=24&sort=price', 9],
   ['?store=unknown&maxPrice=-5&sort=pricePerUnit&page=1.5', 'page=1&pageSize=24&sort=price', 7],
 ] as const) {
   test(`restores safe API filters from URL: ${search}`, () => {
@@ -244,5 +247,67 @@ test('uses selected promotion date in API query', () => {
   } finally {
     client.clear();
     vi.unstubAllGlobals();
+  }
+});
+
+test('keeps search input focused while typing and debounces API and URL updates', async () => {
+  const dom = new JSDOM('<!doctype html><div id="root"></div>', {
+    url: 'http://localhost/',
+  });
+  const fetchMock = vi.fn(() => new Promise<Response>(() => {}));
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: Infinity } },
+  });
+  const container = dom.window.document.getElementById('root')!;
+  let unmount: (() => void) | undefined;
+
+  vi.stubGlobal('window', dom.window);
+  vi.stubGlobal('document', dom.window.document);
+  vi.stubGlobal('navigator', dom.window.navigator);
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+  vi.stubGlobal('fetch', fetchMock);
+
+  try {
+    const { createRoot } = await import('react-dom/client');
+    const root = createRoot(container);
+    unmount = () => root.unmount();
+    await act(async () => {
+      root.render(createElement(QueryClientProvider, { client }, createElement(App)));
+    });
+
+    const input = container.querySelector<HTMLInputElement>(
+      'input[placeholder="Szukaj, np. kawa"]',
+    )!;
+    await act(async () => {
+      input.focus();
+      for (const value of ['k', 'ka', 'kaw', 'kawa']) {
+        Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value')!.set!.call(
+          input,
+          value,
+        );
+        input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+      }
+    });
+
+    assert.equal(dom.window.document.activeElement, input);
+    assert.equal(container.querySelector('input[placeholder="Szukaj, np. kawa"]'), input);
+    assert.equal(fetchMock.mock.calls.length, 1);
+    assert.equal(dom.window.location.search, '');
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    });
+
+    assert.equal(dom.window.document.activeElement, input);
+    assert.equal(container.querySelector('input[placeholder="Szukaj, np. kawa"]'), input);
+    assert.equal(fetchMock.mock.calls.length, 2);
+    assert.equal(dom.window.location.search, '?q=kawa');
+    assert.equal(dom.window.location.pathname, '/');
+  } finally {
+    const cleanup = unmount;
+    if (cleanup) await act(async () => cleanup());
+    client.clear();
+    vi.unstubAllGlobals();
+    dom.window.close();
   }
 });

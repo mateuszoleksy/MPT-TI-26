@@ -20,6 +20,13 @@ test('validates filters before reading the database', async () => {
     assert.equal(response.json().filters.excludeAppOnly, false);
     assert.equal(response.json().filters.page, 2);
     assert.equal(calls, 1);
+    const search = await app.inject('/api/offers?q=%20%20kawa%20%20');
+    assert.equal(search.statusCode, 200);
+    assert.equal(search.json().filters.q, 'kawa');
+    const blankSearch = await app.inject('/api/offers?q=%20%20%20');
+    assert.equal(blankSearch.statusCode, 200);
+    assert.equal(blankSearch.json().filters.q, undefined);
+    assert.equal(calls, 3);
   } finally {
     await app.close();
   }
