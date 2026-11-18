@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "scrape:once": "tsx src/index.ts --once",
+    "dev": "node --env-file-if-exists=../../.env --import tsx --watch src/index.ts",
+    "scrape:once": "node --env-file-if-exists=../../.env --import tsx src/index.ts --once",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",

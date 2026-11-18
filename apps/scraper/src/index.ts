@@ -1,56 +1,35 @@
 import cron from 'node-cron';
-import { OfferSchema, StoreSchema } from '@promo/shared';
-import { biedronkaAdapter } from './adapters/biedronka.js';
+import { StoreSchema } from '@promo/shared';
+import { connectDatabase, saveSourceOffers, type Database } from '@promo/shared/db';
 import { fetchCurrentBlixCandidates } from './adapters/blix.js';
-import { lidlAdapter } from './adapters/lidl.js';
-import { scheduleJob } from './scheduler.js';
-
-const adapters = [biedronkaAdapter, lidlAdapter];
+import { runScrapeCycle, scheduleJob } from './scheduler.js';
 
 /** Returns false when any store failed, so `--once` can exit non-zero. */
-async function runAll(): Promise<boolean> {
-  let ok = true;
-  for (const adapter of adapters) {
-    const started = Date.now();
-    try {
-      const raw = await adapter.fetchOffers();
-      const valid = raw.filter((o) => OfferSchema.safeParse(o).success);
-      // TODO: upsert `valid` into PostgreSQL and record a scrape_runs row
-      console.info(
-        `[${adapter.store}] ${valid.length}/${raw.length} valid offers in ${Date.now() - started} ms`,
-      );
-    } catch (err) {
-      ok = false;
-      console.error(`[${adapter.store}] scrape failed`, err);
-    }
-  }
-  for (const store of StoreSchema.options) {
-    const started = Date.now();
-    try {
-      const batch = await fetchCurrentBlixCandidates(store);
-      // TODO: store candidates once the database layer exists; they still need review
-      console.info(
-        `[blix:${store}] ${batch.candidates.length} candidates from ${batch.results.length}/${batch.leaflets.length} leaflets in ${Date.now() - started} ms`,
-      );
-      for (const failure of batch.failures) {
-        ok = false;
-        console.error(`[blix:${store}] leaflet ${failure.leafletId} failed: ${failure.message}`);
-      }
-    } catch (err) {
-      ok = false;
-      console.error(`[blix:${store}] scrape failed`, err);
-    }
-  }
-  return ok;
+async function runAll(database: Database): Promise<boolean> {
+  return runScrapeCycle(StoreSchema.options, fetchCurrentBlixCandidates, (offers, details) =>
+    saveSourceOffers(database, offers, details),
+  );
 }
 
 if (process.argv.includes('--once')) {
-  if (!(await runAll())) process.exitCode = 1;
+  const database = connectDatabase();
+  try {
+    console.info('Uruchamiam jednorazowy przebieg pobierania promocji.');
+    if (!(await runAll(database.db))) process.exitCode = 1;
+  } finally {
+    await database.close();
+    console.info('Połączenie z bazą danych zostało zamknięte.');
+  }
 } else {
   const schedule = process.env.SCRAPE_CRON ?? '0 6 * * *';
   const timezone = process.env.SCRAPE_TZ ?? 'Europe/Warsaw';
   if (!cron.validate(schedule)) throw new Error(`Invalid SCRAPE_CRON: "${schedule}"`);
-  const job = scheduleJob(schedule, runAll, { name: 'scrape', timezone, noOverlap: true });
+  const database = connectDatabase();
+  const job = scheduleJob(schedule, () => runAll(database.db), {
+    name: 'scrape',
+    timezone,
+    noOverlap: true,
+  });
   console.info(
     `Scraper scheduled: "${schedule}" (${timezone}), next run ${job.task.getNextRun()?.toISOString()}`,
   );
@@ -58,6 +37,7 @@ if (process.argv.includes('--once')) {
     process.once(signal, async () => {
       console.info(`${signal} received, stopping scheduler`);
       await job.stop();
+      await database.close();
       process.exit(0);
     });
 }

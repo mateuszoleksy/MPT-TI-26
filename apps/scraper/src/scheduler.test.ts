@@ -1,8 +1,59 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { afterEach, test, vi } from 'vitest';
-import { scheduleJob } from './scheduler.js';
+import { parseBlixCandidates } from './adapters/blix-parser.js';
+import { runScrapeCycle, scheduleJob } from './scheduler.js';
 
-afterEach(() => vi.useRealTimers());
+const fixture = JSON.parse(
+  readFileSync(new URL('./adapters/__fixtures__/blix-sample.json', import.meta.url), 'utf8'),
+) as { offers: unknown[]; sourceUrl: string };
+const fixtureCandidates = parseBlixCandidates(
+  `<script>window.offers = ${JSON.stringify(fixture.offers)};</script>`,
+  fixture.sourceUrl,
+).candidates;
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
+
+test('validates and persists fixture candidates while continuing after a store failure', async () => {
+  vi.spyOn(console, 'info').mockImplementation(() => {});
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+  const attempted: string[] = [];
+  const saved: {
+    offers: unknown[];
+    details: { failures: unknown[]; pending: number; saved: number };
+  }[] = [];
+
+  const ok = await runScrapeCycle(
+    ['biedronka', 'lidl'],
+    async (store) => {
+      attempted.push(store);
+      if (store === 'lidl') throw new Error('Source unavailable');
+      return {
+        candidates: [fixtureCandidates[0], { ...fixtureCandidates[1], reportedPrice: -1 }],
+        failures: [{ leafletId: '534004', message: 'Leaflet unavailable' }],
+      };
+    },
+    async (offers, details) => {
+      saved.push({ offers, details });
+      return offers.length;
+    },
+  );
+
+  assert.equal(ok, false);
+  assert.deepEqual(attempted, ['biedronka', 'lidl']);
+  assert.equal(saved.length, 2);
+  assert.deepEqual(
+    saved[0].offers.map((offer) => (offer as { id: string }).id),
+    [fixtureCandidates[0].id],
+  );
+  assert.equal(saved[0].details.saved, 1);
+  assert.equal(saved[0].details.failures.length, 2);
+  assert.deepEqual(saved[1].offers, []);
+  assert.equal(saved[1].details.failures.length, 1);
+});
 
 test('stop waits for the active run however long it takes', async () => {
   vi.useFakeTimers({ toFake: ['setTimeout'] });

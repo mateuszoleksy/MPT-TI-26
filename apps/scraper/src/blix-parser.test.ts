@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { test } from 'vitest';
+import { test, vi } from 'vitest';
 import { OfferSchema } from '@promo/shared';
 import {
   blixLeafletUrl,
@@ -174,6 +174,7 @@ test('uses the Warsaw date', () => {
 
 test('fetches offers and leaflets', async () => {
   const original = globalThis.fetch;
+  const timeout = vi.spyOn(AbortSignal, 'timeout');
   try {
     globalThis.fetch = async (input, options) => {
       assert.equal(options?.redirect, 'error');
@@ -184,6 +185,7 @@ test('fetches offers and leaflets', async () => {
       });
     };
     assert.equal((await fetchBlixCandidates('biedronka', '534003')).candidates.length, 2);
+    assert.equal(timeout.mock.calls[0][0], 15_000);
     globalThis.fetch = async () =>
       new Response(card('534102', undefined, undefined, 'lidl'), {
         headers: { 'content-type': 'text/html' },
@@ -191,6 +193,7 @@ test('fetches offers and leaflets', async () => {
     assert.equal((await listBlixLeaflets('lidl'))[0].id, '534102');
   } finally {
     globalThis.fetch = original;
+    timeout.mockRestore();
   }
 });
 
