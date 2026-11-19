@@ -48,6 +48,20 @@ export async function saveSourceOffers(
         )
         .onConflictDoUpdate({
           target: schema.offerCandidates.id,
+          // A basic import can replace enriched data when the source offer changes.
+          setWhere: sql`not (
+            excluded.payload->'productDetails' is null
+            and ${schema.offerCandidates.payload}->'productDetails' is not null
+            and ${schema.offerCandidates.store} = excluded.store
+            and ${schema.offerCandidates.leafletId} = excluded.leaflet_id
+            and coalesce(${schema.offerCandidates.payload}->>'sourceName', ${schema.offerCandidates.name}) = excluded.name
+            and ${schema.offerCandidates.category} is not distinct from excluded.category
+            and ${schema.offerCandidates.reportedPrice} = excluded.reported_price
+            and ${schema.offerCandidates.validFrom} = excluded.valid_from
+            and ${schema.offerCandidates.validTo} = excluded.valid_to
+            and ${schema.offerCandidates.payload}->'sourceUrl' is not distinct from excluded.payload->'sourceUrl'
+            and ${schema.offerCandidates.payload}->'imageUrl' is not distinct from excluded.payload->'imageUrl'
+          )`,
           set: {
             store: sql`excluded.store`,
             leafletId: sql`excluded.leaflet_id`,

@@ -20,7 +20,8 @@
     "test": "npm run test --workspaces --if-present",
     "format:check": "prettier --check .",
     "offers:blix": "npm run offers:blix -w @promo/scraper --",
-    "db:migrate": "node --env-file-if-exists=.env --import tsx packages/shared/src/db/migrate.ts"
+    "db:migrate": "node --env-file-if-exists=.env --import tsx packages/shared/src/db/migrate.ts",
+    "offers:conditions": "npm run offers:conditions -w @promo/scraper --"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",

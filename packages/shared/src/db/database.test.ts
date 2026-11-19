@@ -56,6 +56,21 @@ test('updates occurrences without creating duplicates', async () => {
   expect(await actual.select().from(schema.scrapeRuns)).toHaveLength(2);
 });
 
+test('keeps OCR details on a basic reimport and clears them when the source price changes', async () => {
+  const basic = row('ocr');
+  await saveSourceOffers(db, [
+    { ...basic, unit: 'kg', unitQuantity: 0.4, productDetails: { quantity: { value: 0.4 } } },
+  ]);
+  await saveSourceOffers(db, [basic]);
+  expect((await listSourceOffers(db, filters())).items[0].unitQuantity).toBe(0.4);
+
+  await saveSourceOffers(db, [{ ...basic, reportedPrice: 3.49 }]);
+  const [offer] = (await listSourceOffers(db, filters())).items;
+  expect(offer.reportedPrice).toBe(3.49);
+  expect(offer.unitQuantity).toBeNull();
+  expect(offer.productDetails).toBeUndefined();
+});
+
 test('preserves quantities and separate reference prices in the API payload', async () => {
   const item = {
     ...row('size'),

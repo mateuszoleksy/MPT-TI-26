@@ -1,0 +1,31 @@
+FROM node:24-bookworm-slim AS build
+WORKDIR /repo
+COPY package.json package-lock.json tsconfig.base.json ./
+COPY packages/shared/package.json packages/shared/
+COPY apps/scraper/package.json apps/scraper/
+RUN npm ci -w @promo/scraper -w @promo/shared --include-workspace-root
+COPY packages/shared packages/shared
+COPY apps/scraper apps/scraper
+RUN npm run build -w @promo/shared && npm run build -w @promo/scraper \
+ && npm prune --omit=dev -w @promo/scraper -w @promo/shared \
+ && mkdir -p packages/shared/node_modules
+
+FROM node:24-bookworm-slim
+WORKDIR /repo
+COPY apps/scraper/scripts/requirements-ocr.txt /tmp/requirements-ocr.txt
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends python3 python3-venv libgl1 libglib2.0-0 \
+ && python3 -m venv /opt/ocr \
+ && /opt/ocr/bin/pip install --no-cache-dir -r /tmp/requirements-ocr.txt \
+ && rm -rf /var/lib/apt/lists/* \
+ && mkdir /data && chown node:node /data
+ENV NODE_ENV=production PYTHON=/opt/ocr/bin/python
+COPY --from=build /repo/node_modules node_modules
+COPY --from=build /repo/packages/shared/package.json packages/shared/
+COPY --from=build /repo/packages/shared/dist packages/shared/dist
+COPY --from=build /repo/packages/shared/node_modules packages/shared/node_modules
+COPY --from=build /repo/apps/scraper/package.json apps/scraper/
+COPY --from=build /repo/apps/scraper/dist apps/scraper/dist
+COPY apps/scraper/scripts/promotion_ocr.py apps/scraper/scripts/promotion_ocr.py
+USER node
+CMD ["node", "--max-http-header-size=65536", "apps/scraper/dist/offers-conditions.js", "--all", "--ocr", "--drain", "--budget", "360", "--max-hours", "4", "--state", "/data/blix-conditions.json", "--persist"]
