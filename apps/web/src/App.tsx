@@ -104,291 +104,326 @@ export function App() {
   });
 
   const offers = data?.items ?? [];
+  const total = data?.total ?? 0;
+  const lastPage = page * 24 >= total;
 
   return (
-    <main
-      style={{
-        fontFamily: 'system-ui',
-        maxWidth: 960,
-        margin: '0 auto',
-        padding: 16,
-      }}
-    >
-      <h1>Promki dla studenta</h1>
-
-      {/* Istniejące filtry */}
-      <div
-        style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 12,
-          marginBottom: 16,
-        }}
-      >
-        <input
-          placeholder="Szukaj, np. kawa"
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPage(1);
-          }}
-        />
-
-        <select
-          value={store}
-          onChange={(e) => {
-            setStore(e.target.value);
-            setPage(1);
-          }}
-        >
-          <option value="all">Oba sklepy</option>
-          <option value="biedronka">Biedronka</option>
-          <option value="lidl">Lidl</option>
-        </select>
-
-        <label>
-          Maks. cena:{' '}
-          <input
-            type="number"
-            style={{ width: 70 }}
-            value={maxPrice}
-            onChange={(e) => {
-              setMaxPrice(e.target.value);
-              setPage(1);
-            }}
-          />{' '}
-          zł
-        </label>
-
-        <label>
-          <input
-            type="checkbox"
-            checked={noApp}
-            onChange={(e) => {
-              setNoApp(e.target.checked);
-              setPage(1);
-            }}
-          />{' '}
-          Bez aplikacji
-        </label>
-
-        <select
-          value={sort}
-          onChange={(e) => {
-            setSort(e.target.value);
-            setPage(1);
-          }}
-        >
-          <option value="price">Sortuj: najniższa cena</option>
-          <option value="validTo">Sortuj: koniec oferty</option>
-        </select>
-      </div>
-
-      {/* MPT26-21: wybór daty promocji */}
-      <fieldset
-        style={{
-          border: '1px solid #ddd',
-          borderRadius: 8,
-          padding: 12,
-          marginBottom: 20,
-        }}
-      >
-        <legend>
-          <strong>Terminy promocji</strong>
-        </legend>
-
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: 12,
-          }}
-        >
-          <label htmlFor="promotion-date">Sprawdź promocje na dzień:</label>
-
-          <input
-            id="promotion-date"
-            type="date"
-            value={selectedDate}
-            onChange={(e) => {
-              if (e.target.value) {
-                setSelectedDate(e.target.value);
-                setPage(1);
-              }
-            }}
-          />
-
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedDate(warsawDate());
-              setPage(1);
-            }}
-          >
-            Dzisiaj
-          </button>
+    <>
+      <nav className="navbar bg-white border-bottom mb-4">
+        <div className="container">
+          <span className="navbar-brand fw-bold mb-0">Promki dla studenta</span>
+          <span className="text-body-secondary small d-none d-md-inline">
+            Promocje z Biedronki i Lidla w jednym miejscu
+          </span>
         </div>
-      </fieldset>
+      </nav>
 
-      {isLoading && <p role="status">Ładowanie…</p>}
+      <main className="container pb-5">
+        <div className="card mb-4">
+          <div className="card-body">
+            <div className="row g-3 align-items-end">
+              <div className="col-12 col-lg-3">
+                <label htmlFor="search" className="form-label small text-body-secondary">
+                  Produkt
+                </label>
+                <input
+                  id="search"
+                  className="form-control"
+                  placeholder="Szukaj, np. kawa"
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setPage(1);
+                  }}
+                />
+              </div>
 
-      {error && (
-        <p>
-          {data
-            ? 'Nie udało się odświeżyć ofert. Pokazano poprzednie dane.'
-            : `Błąd: ${String(error)}`}
-        </p>
-      )}
+              <div className="col-6 col-md-3 col-lg-2">
+                <label htmlFor="store" className="form-label small text-body-secondary">
+                  Sklep
+                </label>
+                <select
+                  id="store"
+                  className="form-select"
+                  value={store}
+                  onChange={(e) => {
+                    setStore(e.target.value);
+                    setPage(1);
+                  }}
+                >
+                  <option value="all">Oba sklepy</option>
+                  <option value="biedronka">Biedronka</option>
+                  <option value="lidl">Lidl</option>
+                </select>
+              </div>
 
-      <p>Znaleziono: {data?.total ?? 0}</p>
+              <div className="col-6 col-md-3 col-lg-2">
+                <label htmlFor="max-price" className="form-label small text-body-secondary">
+                  Maks. cena
+                </label>
+                <div className="input-group">
+                  <input
+                    id="max-price"
+                    type="number"
+                    min="0"
+                    className="form-control"
+                    value={maxPrice}
+                    onChange={(e) => {
+                      setMaxPrice(e.target.value);
+                      setPage(1);
+                    }}
+                  />
+                  <span className="input-group-text">zł</span>
+                </div>
+              </div>
 
-      {data?.total === 0 && <p>Brak promocji obowiązujących w wybranym dniu.</p>}
+              <div className="col-6 col-md-3 col-lg-3">
+                <label htmlFor="sort" className="form-label small text-body-secondary">
+                  Sortowanie
+                </label>
+                <select
+                  id="sort"
+                  className="form-select"
+                  value={sort}
+                  onChange={(e) => {
+                    setSort(e.target.value);
+                    setPage(1);
+                  }}
+                >
+                  <option value="price">Najniższa cena</option>
+                  <option value="validTo">Koniec oferty</option>
+                </select>
+              </div>
 
-      {noApp && data?.total === 0 && <p>Brak ofert z potwierdzonym brakiem wymogu aplikacji.</p>}
-
-      <p>Dane pochodzą z gazetek. Sprawdź warunki przed zakupem.</p>
-
-      {offers.some((offer) => offer.recheckDue) && (
-        <p>Część danych oczekuje na ponowne sprawdzenie źródła.</p>
-      )}
-
-      {/* Paginacja */}
-      <button disabled={page === 1} onClick={() => setPage(page - 1)}>
-        Poprzednia
-      </button>
-
-      <span> Strona {page} </span>
-
-      <button disabled={page * 24 >= (data?.total ?? 0)} onClick={() => setPage(page + 1)}>
-        Następna
-      </button>
-
-      {/* Siatka produktów */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
-          gap: 12,
-        }}
-      >
-        {offers.map((o) => {
-          const labels = detectedConditionLabels(o);
-
-          const priceSuffix = o.priceQuantity
-            ? ` / ${new Intl.NumberFormat('pl-PL').format(
-                o.priceQuantity.amount < 1 ? o.priceQuantity.amount * 1000 : o.priceQuantity.amount,
-              )} ${
-                o.priceQuantity.amount < 1
-                  ? o.priceQuantity.unit === 'kg'
-                    ? 'g'
-                    : 'ml'
-                  : o.priceQuantity.unit
-              }`
-            : '';
-
-          return (
-            <div
-              key={o.id}
-              style={{
-                border: '1px solid #ccc',
-                borderRadius: 8,
-                padding: 10,
-              }}
-            >
-              <b
-                style={{
-                  color: o.store === 'lidl' ? '#0050aa' : '#e30613',
-                }}
-              >
-                {o.store === 'lidl' ? 'Lidl' : 'Biedronka'}
-              </b>
-
-              <p style={{ margin: '6px 0' }}>{o.name}</p>
-
-              {o.unitQuantity !== null &&
-                o.unitQuantity > 0 &&
-                (o.unit === 'kg' || o.unit === 'l' || o.unit === 'szt') && (
-                  <small>
-                    Ilość:{' '}
-                    {new Intl.NumberFormat('pl-PL', {
-                      maximumFractionDigits: 6,
-                    }).format(
-                      o.unit !== 'szt' && o.unitQuantity < 1
-                        ? o.unitQuantity * 1000
-                        : o.unitQuantity,
-                    )}{' '}
-                    {o.unit !== 'szt' && o.unitQuantity < 1
-                      ? o.unit === 'kg'
-                        ? 'g'
-                        : 'ml'
-                      : o.unit}
-                  </small>
-                )}
-
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: 20,
-                  fontWeight: 'bold',
-                }}
-              >
-                {formatPrice(o.reportedPrice)}
-                {priceSuffix}
-              </p>
-
-              {o.priceRegular !== null && o.priceRegular > o.reportedPrice && (
-                <p style={{ margin: 0, color: '#666' }}>
-                  Cena regularna:{' '}
-                  <s>
-                    {formatPrice(o.priceRegular)}
-                    {priceSuffix}
-                  </s>
-                </p>
-              )}
-
-              {o.pricePrevious != null && o.pricePrevious > o.reportedPrice && (
-                <p style={{ margin: 0, color: '#666' }}>
-                  Poprzednia cena: <s>{formatPrice(o.pricePrevious)}</s>
-                </p>
-              )}
-
-              {labels.length === 0 && o.offerKind !== 'price-reduction' && (
-                <p style={{ margin: '4px 0' }}>Warunki ceny nieustalone. Sprawdź gazetkę.</p>
-              )}
-
-              {labels.map((label) => (
-                <p key={label} style={{ margin: 0 }}>
-                  {label}
-                </p>
-              ))}
-
-              {o.stale && <p>Dane nie zostały odświeżone</p>}
-
-              <p>
-                {(
-                  o.sources ?? [
-                    {
-                      id: o.id,
-                      sourceUrl: o.sourceUrl,
-                    },
-                  ]
-                ).map((source, index) => (
-                  <span key={source.id}>
-                    {index > 0 && ' · '}
-                    <a href={source.sourceUrl} target="_blank" rel="noreferrer">
-                      {(o.sources?.length ?? 0) > 1 ? `Źródło ${index + 1}` : 'Sprawdź źródło'}
-                    </a>
-                  </span>
-                ))}
-              </p>
-
-              {/* MPT26-21: daty i status promocji */}
-              <PromotionValidity period={o} onDate={selectedDate} />
+              {/* MPT26-21: wybór daty promocji */}
+              <div className="col-6 col-md-3 col-lg-2">
+                <label htmlFor="promotion-date" className="form-label small text-body-secondary">
+                  Promocje na dzień
+                </label>
+                <input
+                  id="promotion-date"
+                  type="date"
+                  className="form-control"
+                  value={selectedDate}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      setSelectedDate(e.target.value);
+                      setPage(1);
+                    }
+                  }}
+                />
+              </div>
             </div>
-          );
-        })}
-      </div>
-    </main>
+
+            <div className="d-flex flex-wrap align-items-center gap-3 mt-3">
+              <div className="form-check form-switch mb-0">
+                <input
+                  id="no-app"
+                  className="form-check-input"
+                  type="checkbox"
+                  role="switch"
+                  checked={noApp}
+                  onChange={(e) => {
+                    setNoApp(e.target.checked);
+                    setPage(1);
+                  }}
+                />
+                <label htmlFor="no-app" className="form-check-label">
+                  Bez aplikacji
+                </label>
+              </div>
+
+              {selectedDate !== warsawDate() && (
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary"
+                  onClick={() => {
+                    setSelectedDate(warsawDate());
+                    setPage(1);
+                  }}
+                >
+                  Dzisiaj
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {error && (
+          <div className={`alert ${data ? 'alert-warning' : 'alert-danger'}`}>
+            {data
+              ? 'Nie udało się odświeżyć ofert. Pokazano poprzednie dane.'
+              : `Błąd: ${String(error)}`}
+          </div>
+        )}
+
+        {offers.some((offer) => offer.recheckDue) && (
+          <div className="alert alert-info py-2 small">
+            Część danych oczekuje na ponowne sprawdzenie źródła.
+          </div>
+        )}
+
+        <div className="d-flex flex-wrap justify-content-between align-items-baseline gap-2 mb-3">
+          <h2 className="h5 mb-0">
+            Znaleziono: {total}
+            {isLoading && (
+              <span
+                role="status"
+                className="spinner-border spinner-border-sm text-secondary ms-2"
+                aria-label="Ładowanie…"
+              />
+            )}
+          </h2>
+          <small className="text-body-secondary">
+            Dane pochodzą z gazetek. Sprawdź warunki przed zakupem.
+          </small>
+        </div>
+
+        {data?.total === 0 && (
+          <div className="alert alert-light border">
+            Brak promocji obowiązujących w wybranym dniu.
+            {noApp && ' Brak ofert z potwierdzonym brakiem wymogu aplikacji.'}
+          </div>
+        )}
+
+        <div className="row row-cols-1 row-cols-sm-2 row-cols-lg-3 row-cols-xl-4 g-3">
+          {offers.map((o) => {
+            const labels = detectedConditionLabels(o);
+
+            const priceSuffix = o.priceQuantity
+              ? ` / ${new Intl.NumberFormat('pl-PL').format(
+                  o.priceQuantity.amount < 1
+                    ? o.priceQuantity.amount * 1000
+                    : o.priceQuantity.amount,
+                )} ${
+                  o.priceQuantity.amount < 1
+                    ? o.priceQuantity.unit === 'kg'
+                      ? 'g'
+                      : 'ml'
+                    : o.priceQuantity.unit
+                }`
+              : '';
+
+            return (
+              <div key={o.id} className="col">
+                <div className="card h-100">
+                  <div className="card-body d-flex flex-column">
+                    <span
+                      className="badge align-self-start mb-2"
+                      style={{ background: o.store === 'lidl' ? '#0050aa' : '#e30613' }}
+                    >
+                      {o.store === 'lidl' ? 'Lidl' : 'Biedronka'}
+                    </span>
+
+                    <h3 className="h6 card-title mb-1">{o.name}</h3>
+
+                    {o.unitQuantity !== null &&
+                      o.unitQuantity > 0 &&
+                      (o.unit === 'kg' || o.unit === 'l' || o.unit === 'szt') && (
+                        <small className="text-body-secondary">
+                          Ilość:{' '}
+                          {new Intl.NumberFormat('pl-PL', {
+                            maximumFractionDigits: 6,
+                          }).format(
+                            o.unit !== 'szt' && o.unitQuantity < 1
+                              ? o.unitQuantity * 1000
+                              : o.unitQuantity,
+                          )}{' '}
+                          {o.unit !== 'szt' && o.unitQuantity < 1
+                            ? o.unit === 'kg'
+                              ? 'g'
+                              : 'ml'
+                            : o.unit}
+                        </small>
+                      )}
+
+                    <p className="fs-4 fw-bold mt-2 mb-0">
+                      {formatPrice(o.reportedPrice)}
+                      {priceSuffix}
+                    </p>
+
+                    {o.priceRegular !== null && o.priceRegular > o.reportedPrice && (
+                      <small className="text-body-secondary">
+                        Cena regularna:{' '}
+                        <s>
+                          {formatPrice(o.priceRegular)}
+                          {priceSuffix}
+                        </s>
+                      </small>
+                    )}
+
+                    {o.pricePrevious != null && o.pricePrevious > o.reportedPrice && (
+                      <small className="text-body-secondary">
+                        Poprzednia cena: <s>{formatPrice(o.pricePrevious)}</s>
+                      </small>
+                    )}
+
+                    <div className="d-flex flex-wrap gap-1 mt-2">
+                      {labels.map((label) => (
+                        <span
+                          key={label}
+                          className="badge text-bg-warning fw-normal text-wrap text-start"
+                        >
+                          {label}
+                        </span>
+                      ))}
+                    </div>
+
+                    {labels.length === 0 && o.offerKind !== 'price-reduction' && (
+                      <small className="text-body-secondary fst-italic">
+                        Warunki ceny nieustalone. Sprawdź gazetkę.
+                      </small>
+                    )}
+
+                    {o.stale && <small className="text-danger">Dane nie zostały odświeżone</small>}
+
+                    {/* MPT26-21: daty i status promocji */}
+                    <div className="mt-auto">
+                      <PromotionValidity period={o} onDate={selectedDate} />
+                    </div>
+                  </div>
+
+                  <div className="card-footer bg-transparent small">
+                    {(
+                      o.sources ?? [
+                        {
+                          id: o.id,
+                          sourceUrl: o.sourceUrl,
+                        },
+                      ]
+                    ).map((source, index) => (
+                      <span key={source.id}>
+                        {index > 0 && ' · '}
+                        <a href={source.sourceUrl} target="_blank" rel="noreferrer">
+                          {(o.sources?.length ?? 0) > 1 ? `Źródło ${index + 1}` : 'Sprawdź źródło'}
+                        </a>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <nav className="mt-4" aria-label="Strony wyników">
+          <ul className="pagination justify-content-center mb-0">
+            <li className={`page-item ${page === 1 ? 'disabled' : ''}`}>
+              <button className="page-link" disabled={page === 1} onClick={() => setPage(page - 1)}>
+                Poprzednia
+              </button>
+            </li>
+            <li className="page-item active" aria-current="page">
+              <span className="page-link">Strona {page}</span>
+            </li>
+            <li className={`page-item ${lastPage ? 'disabled' : ''}`}>
+              <button className="page-link" disabled={lastPage} onClick={() => setPage(page + 1)}>
+                Następna
+              </button>
+            </li>
+          </ul>
+        </nav>
+      </main>
+    </>
   );
 }
