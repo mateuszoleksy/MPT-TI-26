@@ -87,3 +87,5 @@ export async function fetchCurrentBlixCandidates(store: Store, onDate = todayInW
     candidates: results.flatMap((result) => result.candidates),
   };
 }
+
+export { fetchHtml as fetchBlixHtml };

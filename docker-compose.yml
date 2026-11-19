@@ -54,6 +54,17 @@ services:
     restart: unless-stopped
     stop_grace_period: 2m
 
+  ocr:
+    profiles: ['worker']
+    build: { context: ., dockerfile: apps/scraper/Dockerfile.ocr }
+    init: true
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-promo}:${POSTGRES_PASSWORD:-promo}@db:5432/${POSTGRES_DB:-promo}
+    volumes:
+      - ocrdata:/data
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
   web:
     build: { context: ., dockerfile: apps/web/Dockerfile }
     depends_on:
@@ -63,3 +74,4 @@ services:
 
 volumes:
   pgdata:
+  ocrdata:

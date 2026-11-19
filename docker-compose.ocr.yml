@@ -1,0 +1,14 @@
+services:
+  scraper:
+    build:
+      dockerfile: apps/scraper/Dockerfile.ocr
+    command: ['node', '--max-http-header-size=65536', 'apps/scraper/dist/index.js', '--ocr']
+    init: true
+    environment:
+      OCR_STATE_FILE: /data/blix-conditions.json
+    volumes:
+      - ocrdata:/data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    stop_grace_period: 6m
