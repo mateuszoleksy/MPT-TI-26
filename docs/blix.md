@@ -87,4 +87,4 @@ python -m unittest discover -s apps/scraper/scripts
 
 Missing or conflicting fields remain unknown. For priced bundles, OCR also checks the full page and attaches the condition when the reward name and price match the offer. Other conditions outside the product crop may be missed. Empty leaflets are reported while other sources continue.
 
-Regular, previous and lowest-30-days prices stay separate. OCR reuses identical image crops, not matching names alone.
+Regular, previous and lowest-30-days prices stay separate. OCR reuses identical image crops. The same offer on several pages or leaflets is shown once when its product, package size, prices, dates and conditions agree. Grouped offers keep their source links.

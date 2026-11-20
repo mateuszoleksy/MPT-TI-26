@@ -265,12 +265,11 @@ test('shows only offers active today by default using the Warsaw date', async ()
   expect(future.items.map((item) => item.id).sort()).toEqual(['active', 'future']);
 });
 
-test('groups matching images before pagination and keeps all source occurrences', async () => {
-  const key = 'a'.repeat(64);
-  const a = { ...row('a'), duplicateKey: key };
+test('groups the same offer across leaflets before pagination and keeps all source occurrences', async () => {
+  const a = { ...row('a'), unit: 'kg', unitQuantity: 0.2 };
   const b = {
-    ...row('b'),
-    duplicateKey: key,
+    ...a,
+    id: 'b',
     leafletId: '456',
     sourceUrl: 'https://blix.pl/sklep/lidl/gazetka/456/',
   };
@@ -285,23 +284,19 @@ test('groups matching images before pagination and keeps all source occurrences'
   expect((await listSourceOffers(db, filters({ q: 'Masło', maxPrice: 3 }))).total).toBe(1);
 });
 
-test('keeps ambiguous repeated occurrences inside one leaflet separate', async () => {
-  const key = 'b'.repeat(64);
-  await saveSourceOffers(
-    db,
-    ['a', 'b'].map((id) => ({ ...row(id), duplicateKey: key })),
-  );
+test('does not group offers with an unknown package size', async () => {
+  await saveSourceOffers(db, [row('a'), { ...row('b'), pageNumber: 2 }]);
   expect((await listSourceOffers(db, filters())).total).toBe(2);
 });
 
 test('retains original assortment names and finds a named variant', async () => {
-  const key = 'c'.repeat(64);
+  const assortment = { name: 'Cukierki Tic Tac', unit: 'kg', amount: 0.018 };
   await saveSourceOffers(db, [
     {
       ...row('a'),
       name: 'Cukierki Tic Tac - różne rodzaje',
       sourceName: 'Cukierki Tic Tac Orange',
-      duplicateKey: key,
+      assortment,
     },
     {
       ...row('b'),
@@ -310,7 +305,7 @@ test('retains original assortment names and finds a named variant', async () => 
       unit: 'kg',
       unitQuantity: 0.018,
       leafletId: '456',
-      duplicateKey: key,
+      assortment,
     },
   ]);
   const grouped = await listSourceOffers(db, filters({ q: 'Tic Tac' }));
@@ -335,4 +330,84 @@ test('hides explicit regular prices before counting and pagination without delet
   const second = await listSourceOffers(db, filters({ sort: 'price', pageSize: 1, page: 2 }));
   expect(second.items[0].id).toBe('unknown');
   expect(await actual.select().from(schema.offerCandidates)).toHaveLength(3);
+});
+
+test('groups repeated offers across pages before counting and pagination', async () => {
+  const a = {
+    ...row('a'),
+    name: 'Pierogi ruskie',
+    unit: 'kg',
+    unitQuantity: 0.4,
+    offerKind: 'price-reduction',
+    pricePrevious: 3.49,
+    pageNumber: 10,
+    sourceUrl: 'https://blix.pl/sklep/lidl/gazetka/123/?pageNumber=10',
+  };
+  await saveSourceOffers(db, [
+    a,
+    {
+      ...a,
+      id: 'b',
+      pageNumber: 11,
+      sourceUrl: 'https://blix.pl/sklep/lidl/gazetka/123/?pageNumber=11',
+    },
+    row('c', 'lidl', 3.99),
+  ]);
+  const result = await listSourceOffers(db, filters({ pageSize: 1 }));
+  expect(result.total).toBe(2);
+  expect(result.items[0].sources?.map((s) => s.pageNumber)).toEqual([10, 11]);
+  expect(await actual.select().from(schema.offerCandidates)).toHaveLength(3);
+});
+
+test('keeps different variants, quantities, terms, dates and incomplete offers separate', async () => {
+  const a = {
+    ...row('a'),
+    name: 'Pierogi ruskie',
+    unit: 'kg',
+    unitQuantity: 0.4,
+    offerKind: 'price-reduction',
+    pricePrevious: 3.49,
+  };
+  const variants = [
+    { name: 'Pierogi z serem' },
+    { unitQuantity: 0.5 },
+    { requiresApp: true },
+    { conditions: 'Przy zakupie 2 sztuk' },
+    { pricePrevious: 4.49 },
+    { validTo: '2026-11-15' },
+    { unitQuantity: null },
+    { stale: true },
+    { offerKind: 'unknown' },
+    { promotion: { conflicts: ['multiBuy'] } },
+  ];
+  await saveSourceOffers(db, [a, ...variants.map((v, i) => ({ ...a, ...v, id: `b${i}` }))]);
+  expect((await listSourceOffers(db, filters())).total).toBe(variants.length + 1);
+});
+
+test('groups matching offers across leaflets while retaining every occurrence', async () => {
+  const offer = {
+    ...row('a'),
+    name: 'Pierogi ruskie',
+    unit: 'kg',
+    unitQuantity: 0.4,
+    offerKind: 'price-reduction',
+    pricePrevious: 3.49,
+  };
+  await saveSourceOffers(
+    db,
+    ['123', '456'].flatMap((leafletId) =>
+      [10, 11].map((pageNumber) => ({
+        ...offer,
+        id: `${leafletId}-${pageNumber}`,
+        leafletId,
+        pageNumber,
+        sourceUrl: `https://blix.pl/sklep/lidl/gazetka/${leafletId}/?pageNumber=${pageNumber}`,
+      })),
+    ),
+  );
+  const result = await listSourceOffers(db, filters({ pageSize: 1 }));
+  expect(result.total).toBe(1);
+  expect(result.items[0].sources).toHaveLength(4);
+  expect(new Set(result.items[0].sources?.map((s) => s.leafletId)).size).toBe(2);
+  expect(await actual.select().from(schema.offerCandidates)).toHaveLength(4);
 });
