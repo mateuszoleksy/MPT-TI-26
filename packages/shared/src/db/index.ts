@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import pg from 'pg';
 import { type SQL, and, asc, count, desc, gte, ilike, inArray, lte, or, sql } from 'drizzle-orm';
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
@@ -15,6 +16,51 @@ export async function checkDatabase(db: Database) {
   await db.execute(sql`select 1`);
 }
 
+function withoutEvidence(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withoutEvidence);
+  if (value && typeof value === 'object')
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([key]) => key !== 'evidence' && key !== 'sourceUrl')
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, item]) => [key, withoutEvidence(item)]),
+    );
+  return value;
+}
+
+/**
+ * The same offer printed on several pages or leaflets gets one key, so the list shows it once.
+ * Offers without a known package size, outdated data or conflicting conditions are never grouped.
+ */
+export function duplicateKey(offer: SourceOffer) {
+  const assortment = offer.assortment as { unit?: string; amount?: number } | undefined;
+  const unit = offer.unit ?? assortment?.unit;
+  const unitQuantity = offer.unitQuantity ?? assortment?.amount;
+  const promotion = offer.promotion as { conflicts?: unknown[] } | undefined;
+  if (!unit || !(Number(unitQuantity) > 0) || offer.stale || offer.ocrStale) return undefined;
+  if (promotion?.conflicts?.length) return undefined;
+  return createHash('sha256')
+    .update(
+      JSON.stringify([
+        offer.store,
+        offer.offerKind,
+        offer.name.trim().toLowerCase(),
+        offer.reportedPrice,
+        offer.priceRegular,
+        offer.pricePrevious ?? null,
+        offer.priceQuantity ?? null,
+        unit,
+        unitQuantity,
+        offer.validFrom,
+        offer.validTo,
+        offer.requiresApp,
+        offer.conditions,
+        withoutEvidence(promotion ?? null),
+      ]),
+    )
+    .digest('hex');
+}
+
 export async function saveSourceOffers(
   db: Database,
   input: unknown[],
@@ -22,7 +68,8 @@ export async function saveSourceOffers(
 ) {
   const unique = new Map<string, SourceOffer>();
   for (const value of input) {
-    const row = SourceOfferSchema.parse(value);
+    const parsed = SourceOfferSchema.parse(value);
+    const row = { ...parsed, duplicateKey: duplicateKey(parsed) };
     const previous = unique.get(row.id);
     if (previous && JSON.stringify(previous) !== JSON.stringify(row))
       throw new Error('Conflicting source occurrence');
@@ -109,11 +156,7 @@ export async function listSourceOffers(db: Database, filters: OfferFilters, now 
     );
   if (filters.minDiscount !== undefined) clauses.push(sql`false`);
   const where = and(...clauses);
-  const groupKey = sql`case when ${table.payload}->>'duplicateKey' in (
-    select payload->>'duplicateKey' from offer_candidates
-    where payload->>'duplicateKey' is not null
-    group by payload->>'duplicateKey', leaflet_id having count(*) > 1
-  ) then ${table.id} else coalesce(${table.payload}->>'duplicateKey', ${table.id}) end`;
+  const groupKey = sql`coalesce(${table.payload}->>'duplicateKey', ${table.id})`;
   const grouped = db
     .select({
       payload:
