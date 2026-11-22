@@ -5,6 +5,10 @@ services:
     command: ['node', '--max-http-header-size=65536', 'apps/scraper/dist/index.js', '--ocr']
     init: true
     environment:
+      OCR_THREADS: ${OCR_THREADS:-2}
+      OCR_REUSE_UNCHANGED: ${OCR_REUSE_UNCHANGED:-0}
+      OCR_PAGE_MAX_SIDE: ${OCR_PAGE_MAX_SIDE:-0}
+      OCR_PREFETCH_PAGES: ${OCR_PREFETCH_PAGES:-1}
       OCR_STATE_FILE: /data/blix-conditions.json
     volumes:
       - ocrdata:/data

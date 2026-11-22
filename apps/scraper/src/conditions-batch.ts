@@ -14,7 +14,7 @@ import {
   type OcrRegion,
 } from './adapters/blix-conditions.js';
 import { hasDetectedConditions, type ConditionEvidence } from './adapters/promotion-conditions.js';
-import { readImages, type OcrResult } from './condition-ocr.js';
+import { createOcrSession, type readImages, type OcrResult } from './condition-ocr.js';
 
 interface Entry {
   candidate: BlixCandidate;
@@ -49,10 +49,9 @@ interface Dependencies {
   pause: () => Promise<void>;
   now: () => number;
 }
-const defaults: Dependencies = {
+const defaults: Omit<Dependencies, 'ocr'> = {
   list: listBlixLeaflets,
   fetch: fetchBlixHtml,
-  ocr: readImages,
   pause: () => delay(2000),
   now: Date.now,
 };
@@ -190,6 +189,8 @@ async function save(stateFile: string, state: State) {
 
 export async function runConditionsBatch(options: Options, overrides: Partial<Dependencies> = {}) {
   const deps = { ...defaults, ...overrides };
+  const ocrCacheDirectory = resolve(dirname(options.stateFile), 'ocr');
+  const ocrSession = createOcrSession(ocrCacheDirectory);
   const now = deps.now();
   await mkdir(dirname(options.stateFile), { recursive: true });
   const lockPath = options.stateFile + '.lock';
@@ -303,6 +304,7 @@ export async function runConditionsBatch(options: Options, overrides: Partial<De
     );
     let processed = 0;
     let textReused = 0;
+    let stateReused = 0;
     let stoppedByTime = false;
     for (let i = 0; i < jobs.length; i += 8) {
       if (options.signal?.aborted) break;
@@ -316,25 +318,35 @@ export async function runConditionsBatch(options: Options, overrides: Partial<De
         entry.attemptedAt = deps.now();
       });
       try {
-        const results = await deps.ocr(
-          batch.map((row) => row.region!),
-          resolve(dirname(options.stateFile), 'ocr'),
-        );
+        const regions = batch.map((row) => row.region!);
+        const previous =
+          process.env.OCR_REUSE_UNCHANGED === '1'
+            ? new Map(
+                batch.flatMap((row) => (row.ocr ? [[row.candidate.id, row.ocr] as const] : [])),
+              )
+            : undefined;
+        const results = await (deps.ocr
+          ? deps.ocr(regions, ocrCacheDirectory)
+          : ocrSession.read(regions, previous));
         for (const entry of batch) {
           const result = results.find(
             (row) => row.id === entry.candidate.id && row.sourceUrl === entry.candidate.sourceUrl,
           );
-          if (!result || result.error) {
+          if (!result || result.error || result.pageChecked === false) {
             failures.push({
               sourceUrl: entry.candidate.sourceUrl,
-              message: result?.error ?? 'Missing OCR result',
+              message: result ? (result.error ?? 'Full-page OCR failed') : 'Missing OCR result',
             });
             continue;
           }
-          entry.ocr = result;
           entry.checkedAt = deps.now();
           processed++;
-          if (result.ocrCached) textReused++;
+          if (result.stateReused) {
+            stateReused++;
+          } else {
+            entry.ocr = result;
+            if (result.ocrCached) textReused++;
+          }
         }
       } catch (error) {
         failures.push({ sourceUrl: 'ocr', message: String(error) });
@@ -359,7 +371,8 @@ export async function runConditionsBatch(options: Options, overrides: Partial<De
       inspectedLeaflets,
       candidates: candidates.length,
       ocrProcessed: processed,
-      ocrInferences: processed - textReused,
+      ocrInferences: processed - textReused - stateReused,
+      ocrStateReused: stateReused,
       ocrTextReused: textReused,
       ocrCached:
         entries.filter(
@@ -385,6 +398,7 @@ export async function runConditionsBatch(options: Options, overrides: Partial<De
     };
     return { summary, candidates, failures };
   } finally {
+    ocrSession.close();
     await lock.close();
     process.removeListener('exit', releaseOnExit);
     await unlink(lockPath);

@@ -72,6 +72,16 @@ docker compose -f docker-compose.yml -f docker-compose.ocr.yml logs -f scraper
 
 This switches the existing scraper to OCR mode. It uses `SCRAPE_CRON` and `SCRAPE_TZ` (default 06:00 in Warsaw), waits for migrations, imports both stores and saves OCR progress in `ocrdata`. Each cycle saves basic offers before processing OCR batches. After four hours, the cycle finishes the current batch and stops. Skip the manual OCR container while a scheduled cycle is active. For daily runs, keep the scheduled worker running on the host that will execute the job.
 
+OCR uses two compute threads by default. Set `OCR_THREADS=4` in the shell for a local run, or in `.env` before starting either Docker OCR mode, to use four threads.
+
+For faster full-page OCR, set `OCR_PAGE_MAX_SIDE=1280` in the shell or Docker `.env`. This lowers the detector resolution only for whole pages and uses a separate page cache. Keep the default `0` for the original resolution. Compare both settings on your leaflets before enabling the limit for scheduled runs.
+
+Set `OCR_REUSE_UNCHANGED=1` to refresh saved conditions when the page image hash and OCR configuration match. The earlier run must have completed the full-page read. The worker still checks image freshness using its HTTP cache. Legacy state needs one normal read before it can be reused.
+
+If a required full-page read fails, the offer stays in the queue and keeps its last successful OCR result if the source offer is unchanged. The batch report's `ocrInferences` counts successful new reads of offer crops. Full-page reads are outside this count.
+
+Both Docker OCR modes fetch the next page while OCR processes the current one. HTTP requests run one at a time, with a two-second delay before each request. Set `OCR_PREFETCH_PAGES=0` in `.env` to disable it, or `OCR_PREFETCH_PAGES=1` in the shell to enable it for a local run.
+
 To test the same mode once on the local database, activate `.venv` and run:
 
 ```sh

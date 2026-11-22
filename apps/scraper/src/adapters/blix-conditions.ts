@@ -2,8 +2,14 @@ import { classifyOffer } from './offer-kind.js';
 import { readAssortment } from './assortment.js';
 import { load } from 'cheerio';
 import { readBlixOffers, type BlixCandidate } from './blix-parser.js';
-import { parsePromotionConditions, type ConditionEvidence } from './promotion-conditions.js';
+import {
+  ocrConditionMinConfidence,
+  ocrTextMinConfidence,
+  parsePromotionConditions,
+  type ConditionEvidence,
+} from './promotion-conditions.js';
 import { enrichProductDetails } from './product-details.js';
+import { validatedOcrLines } from './price-layout.js';
 
 export interface OcrRegion {
   id: string;
@@ -150,6 +156,14 @@ export function enrichConditions(
   const productTexts = sourceTexts.filter((evidence) => !evidence.scope);
   const product = enrichProductDetails(candidate, productTexts, rawLines);
   const assortment = readAssortment(candidate.name, productTexts, rawLines);
+  const extraOcrTexts: ConditionEvidence[] = validatedOcrLines(rawLines, ocrConditionMinConfidence)
+    .filter((line) => line.confidence < ocrTextMinConfidence)
+    .map(({ text, confidence }) => ({
+      text,
+      confidence,
+      origin: 'ocr',
+      sourceUrl: candidate.sourceUrl,
+    }));
   const conflict =
     assortment &&
     (product.productDetails.quantity.status === 'conflict' ||
@@ -161,6 +175,6 @@ export function enrichConditions(
     ...(assortment && !conflict
       ? { name: assortment.name + ' - różne rodzaje', sourceName: candidate.name, assortment }
       : {}),
-    promotion: parsePromotionConditions(sourceTexts),
+    promotion: parsePromotionConditions(sourceTexts, extraOcrTexts),
   };
 }
