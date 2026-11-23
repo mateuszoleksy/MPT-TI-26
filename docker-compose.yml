@@ -59,6 +59,10 @@ services:
     build: { context: ., dockerfile: apps/scraper/Dockerfile.ocr }
     init: true
     environment:
+      OCR_THREADS: ${OCR_THREADS:-2}
+      OCR_REUSE_UNCHANGED: ${OCR_REUSE_UNCHANGED:-0}
+      OCR_PAGE_MAX_SIDE: ${OCR_PAGE_MAX_SIDE:-0}
+      OCR_PREFETCH_PAGES: ${OCR_PREFETCH_PAGES:-1}
       DATABASE_URL: postgres://${POSTGRES_USER:-promo}:${POSTGRES_PASSWORD:-promo}@db:5432/${POSTGRES_DB:-promo}
     volumes:
       - ocrdata:/data

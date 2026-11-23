@@ -202,6 +202,47 @@ test('saves discovery progress when OCR fails', async (t) => {
   assert.equal((await runConditionsBatch(options, env.dependencies)).summary.pending, 0);
 });
 
+test('preserves complete OCR and retries when full-page OCR fails', async (t) => {
+  const env = await setup(t);
+  const options = { stores: ['lidl'] as Store[], budget: 2, stateFile: env.stateFile };
+  const first = await runConditionsBatch(options, {
+    ...env.dependencies,
+    ocr: async (regions) =>
+      (await env.dependencies.ocr(regions)).map((row) => ({ ...row, pageChecked: true })),
+  });
+  const initial = first.candidates[0]!;
+  assert.notEqual(initial.promotion.multiBuy.value, null);
+
+  const partial = {
+    ...env.dependencies,
+    ocr: async (regions: Parameters<typeof env.dependencies.ocr>[0]) =>
+      regions.map((row) => ({ ...row, lines: [], pageChecked: false })),
+  };
+  env.advance();
+  const refresh = await runConditionsBatch(options, partial);
+  assert.equal(refresh.summary.complete, false);
+  assert.equal(refresh.summary.failures, 2);
+  assert.ok(refresh.failures.every((failure) => failure.message === 'Full-page OCR failed'));
+  assert.equal(refresh.summary.pending, 2);
+  assert.equal(refresh.summary.ocrProcessed, 0);
+  assert.deepEqual(refresh.candidates[0]?.promotion, initial.promotion);
+  assert.equal(refresh.candidates[0]?.checkedAt, initial.checkedAt);
+  const saved = await readSavedConditions(env.stateFile, env.dependencies.now());
+  assert.deepEqual(saved.candidates[0]?.promotion, initial.promotion);
+  assert.equal(saved.candidates[0]?.checkedAt, initial.checkedAt);
+
+  env.setPrice(299);
+  const fresh = await runConditionsBatch(options, partial);
+  assert.equal(fresh.summary.failures, 2);
+  assert.equal(fresh.summary.pending, 2);
+  assert.ok(fresh.candidates.every((row) => row.checkedAt === null));
+
+  const recovered = await runConditionsBatch(options, env.dependencies);
+  assert.equal(recovered.summary.complete, true);
+  assert.equal(recovered.summary.pending, 0);
+  assert.ok(recovered.candidates.every((row) => row.checkedAt === env.dependencies.now()));
+});
+
 test('rejects corrupted state without overwriting it', async (t) => {
   const env = await setup(t);
   await writeFile(env.stateFile, 'broken');

@@ -174,6 +174,25 @@ test('distinguishes a card from an app', () => {
   assert.equal(result.loyalty.value, 'card-or-app');
 });
 
+test('reads alternate wording for card and app requirements', () => {
+  for (const text of ['Z kartą Moja Biedronka lub z aplikacją', 'Z aplikacją lub z kartą']) {
+    const result = parse(text);
+    assert.equal(result.loyalty.value, 'card-or-app');
+    assert.equal(result.requiresApp.value, false);
+  }
+  assert.equal(parse('Tylko w aplikacji').requiresApp.value, true);
+  assert.equal(parse('Promocja tylko w aplikacji').requiresApp.value, true);
+  assert.equal(parse('Szczegóły tylko w aplikacji').requiresApp.value, null);
+  assert.equal(parse('Sprawdź w aplikacji').requiresApp.value, null);
+});
+
+test('reads numeric second-item discount labels with an explicit discount', () => {
+  const discount = { kind: 'nth-discount', position: 2, percent: 50 };
+  assert.deepEqual(parse('2. produkt 50% taniej').multiBuy.value, discount);
+  assert.deepEqual(parse('2. produkt -50%').multiBuy.value, discount);
+  assert.equal(parse('2. produkt 50% tłuszczu').multiBuy.value, null);
+});
+
 test('reads explicit negative requirements', () => {
   const result = parse('Bez aplikacji. Nie wymaga aktywacji kuponu');
   assert.equal(result.requiresApp.value, false);
@@ -198,6 +217,9 @@ test('reads a quantity-dependent unit price', () => {
   const result = parse('Cena za 1 opak. przy zakupie 3 opak.');
   assert.equal(result.minimumQuantity.value, 3);
   assert.deepEqual(result.priceLabels.value, ['conditional-unit']);
+  assert.deepEqual(parse('Cena za 1 but. przy zakupie 2 but.').priceLabels.value, [
+    'conditional-unit',
+  ]);
 });
 
 test('keeps conflicting requirements unresolved', () => {
@@ -213,6 +235,31 @@ test('rejects low-confidence OCR signals', () => {
   ]);
   assert.equal(result.multiBuy.value, null);
   assert.equal(result.sourceTexts.length, 1);
+});
+
+test('fills explicit purchase terms from weaker OCR without replacing stronger evidence', () => {
+  const sample = (text: string, confidence: number): ConditionEvidence => ({
+    text,
+    confidence,
+    sourceUrl: url,
+    origin: 'ocr',
+  });
+  const result = parsePromotionConditions([
+    sample('przy zakupie 3', 0.97),
+    sample('przy zakupie 2', 0.931),
+    sample('LIMIT DZIENNY 3 SZT. GRATIS NA KARTĘ MB', 0.929),
+    sample('Wybrane produkty. Wydaj min. 129 zł', 0.931),
+    sample('Tylko z aplikacją', 0.91),
+    sample('Cena przed obniżką', 0.91),
+    sample('Limit dzienny 6 szt.', 0.88),
+  ]);
+  assert.equal(result.minimumQuantity.value, 3);
+  assert.deepEqual(result.multiBuy.value, { kind: 'minimum-quantity', quantity: 3 });
+  assert.equal(result.limitText.value, 'limitdzienny3szt.gratisnakartemb');
+  assert.equal(result.minimumSpend.value, 129);
+  assert.equal(result.selectedProducts.value, true);
+  assert.equal(result.requiresApp.value, null);
+  assert.equal(result.priceLabels.value, null);
 });
 
 test('does not join separate numbers', () => {
@@ -283,6 +330,26 @@ test('preserves the candidate and source text', async () => {
   assert.equal(result.reportedPrice, candidate.reportedPrice);
   assert.equal(result.priceBasis, 'unknown');
   assert.equal(result.promotion.sourceTexts[0].text, '2+2 gratis');
+  const fromRawOcr = enrichConditions(
+    candidate,
+    [],
+    [
+      {
+        text: 'Cena za 1 but. przy zakupie 2 but.',
+        confidence: 0.894,
+        box: [
+          [0, 0],
+          [180, 0],
+          [180, 16],
+          [0, 16],
+        ],
+      },
+    ],
+  );
+  assert.equal(fromRawOcr.promotion.minimumQuantity.value, 2);
+  assert.deepEqual(fromRawOcr.promotion.priceLabels.value, ['conditional-unit']);
+  assert.equal(fromRawOcr.reportedPrice, candidate.reportedPrice);
+  assert.equal(fromRawOcr.promotion.sourceTexts.length, 0);
 });
 
 test('rejects ambiguous or missing image metadata', () => {

@@ -1,6 +1,11 @@
 import type { OcrResult } from '../condition-ocr.js';
 import { validatedOcrLines } from './price-layout.js';
-import { bundleAddOnMinConfidence, type ConditionEvidence } from './promotion-conditions.js';
+import {
+  appOnlyCondition,
+  bundleAddOnMinConfidence,
+  cardOrAppCondition,
+  type ConditionEvidence,
+} from './promotion-conditions.js';
 
 type Line = ReturnType<typeof validatedOcrLines>[number];
 type Evidence = Pick<ConditionEvidence, 'text' | 'scope'> & { confidence: number };
@@ -16,8 +21,10 @@ const pricedReward = new RegExp(
   String.raw`^([a-z][a-z0-9,-]*?)za(\d{1,3})(?:[,.](\d{2}))?` + currency,
 );
 const pricedPurchase = new RegExp(String.raw`za\d{1,3}(?:[,.]\d{2})?` + currency + '$');
-const loyaltyText =
-  /zkarta(?:mojabiedronka)?lub(?:apka|aplikacja)|tylkozaplikacja|wylaczniezaplikacja|ofertazaplikacja|tylkozkarta/u;
+const loyaltyText = (text: string) =>
+  cardOrAppCondition.test(text) ||
+  appOnlyCondition.test(text) ||
+  /ofertazaplikacja|tylkozkarta/u.test(text);
 
 function rewardFrom(text: string) {
   const rewardFirst = /^(?:dobierz|odbierz|wez|dokup)(?:1(?=[a-z]))?/.exec(text);
@@ -58,7 +65,7 @@ export function readPageBundles(page: OcrResult) {
     const match = rewardFrom(paragraph.map((line) => line.compact).join(''));
     if (!match) continue;
     const [, product, whole, cents] = match;
-    const loyalty = paragraph.find((line) => loyaltyText.test(line.compact));
+    const loyalty = paragraph.find((line) => loyaltyText(line.compact));
     bundles.push({
       product: product.replace(/,?\d+(?:[,.]\d+)?(?:ml|kg|g|l|szt)$/, ''),
       priceInGrosze: Number(whole) * 100 + Number(cents ?? 0),
@@ -85,7 +92,7 @@ export function readPageBundles(page: OcrResult) {
           line.y2 < pageHeight / 4 &&
           line.y1 > heading.y2 &&
           line.compact.startsWith('oferta') &&
-          loyaltyText.test(line.compact),
+          loyaltyText(line.compact),
       );
     if (loyalty)
       bundles[0].loyalty = {

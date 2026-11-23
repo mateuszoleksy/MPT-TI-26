@@ -19,18 +19,49 @@ export type MultiBuy =
   | { kind: 'nth-discount'; position: number; percent: number };
 
 export const bundleAddOnMinConfidence = 0.92;
+export const ocrTextMinConfidence = 0.94;
+export const ocrConditionMinConfidence = 0.89;
+const fallbackFields = new Set([
+  'multiBuy',
+  'minimumQuantity',
+  'minimumSpend',
+  'selectedProducts',
+  'limitText',
+  'priceBasis',
+]);
+export const cardOrAppCondition =
+  /zkarta(?:mojabiedronka)?lubz?(?:apka|aplikacja)|z(?:apka|aplikacja)(?:mojabiedronka)?lubz?karta/u;
+export const appOnlyCondition =
+  /(?:tylko|wylacznie)zaplikacja|(?:^|oferta|promocja|rabat|cena)(?:tylko|wylacznie)waplikacji/u;
 
-export function parsePromotionConditions(sourceTexts: ConditionEvidence[]) {
+export function parsePromotionConditions(
+  sourceTexts: ConditionEvidence[],
+  extraOcrTexts: ConditionEvidence[] = [],
+) {
   const signals = new Map<string, Map<string, { value: unknown; evidence: ConditionEvidence[] }>>();
+  const fallback: typeof signals = new Map();
   const add = (field: string, value: unknown, evidence: ConditionEvidence) => {
-    const values = signals.get(field) ?? new Map();
+    const weaker =
+      evidence.origin === 'ocr' && !evidence.scope && evidence.confidence! < ocrTextMinConfidence;
+    if (
+      weaker &&
+      (!fallbackFields.has(field) || (field === 'priceBasis' && value !== 'conditional-unit'))
+    )
+      return;
+    const target = weaker ? fallback : signals;
+    const values = target.get(field) ?? new Map();
     const key = JSON.stringify(value);
     const previous = values.get(key);
     values.set(key, { value, evidence: [...(previous?.evidence ?? []), evidence] });
-    signals.set(field, values);
+    target.set(field, values);
   };
-  for (const evidence of sourceTexts) {
-    const minimumConfidence = evidence.scope === 'bundle-add-on' ? bundleAddOnMinConfidence : 0.94;
+  for (const evidence of [...sourceTexts, ...extraOcrTexts]) {
+    const minimumConfidence =
+      evidence.scope === 'bundle-add-on'
+        ? bundleAddOnMinConfidence
+        : evidence.scope
+          ? ocrTextMinConfidence
+          : ocrConditionMinConfidence;
     if (
       evidence.origin === 'ocr' &&
       (!Number.isFinite(evidence.confidence) || evidence.confidence! < minimumConfidence)
@@ -42,7 +73,16 @@ export function parsePromotionConditions(sourceTexts: ConditionEvidence[]) {
       .normalize('NFD')
       .replace(/\p{M}/gu, '');
     const compact = text.replace(/(?<=\d)\s+(?=\d)/g, '|').replace(/\s+/g, '');
-    const either = /zkarta(?:mojabiedronka)?lub(?:apka|aplikacja)/u.test(compact);
+    if (
+      evidence.origin === 'ocr' &&
+      !evidence.scope &&
+      evidence.confidence! < ocrTextMinConfidence &&
+      !/^(?:przyzakupie\d|cenaza1(?:szt|opak|but)|limit(?:dzienny)?[:.]?\d)|wydajmin[.:]?\d/u.test(
+        compact,
+      )
+    )
+      continue;
+    const either = cardOrAppCondition.test(compact);
     if (evidence.scope === 'bundle-add-on') {
       add('addOn', true, evidence);
       continue;
@@ -51,7 +91,7 @@ export function parsePromotionConditions(sourceTexts: ConditionEvidence[]) {
       if (either) {
         add('requiresApp', false, evidence);
         add('loyalty', 'card-or-app', evidence);
-      } else if (/tylkozaplikacja|wylaczniezaplikacja|ofertazaplikacja/u.test(compact)) {
+      } else if (appOnlyCondition.test(compact) || /ofertazaplikacja/u.test(compact)) {
         add('requiresApp', true, evidence);
         add('loyalty', 'app-only', evidence);
       } else if (/tylkozkarta/u.test(compact)) {
@@ -87,7 +127,7 @@ export function parsePromotionConditions(sourceTexts: ConditionEvidence[]) {
     if (
       !either &&
       !without &&
-      /tylkozaplikacja|wylaczniezaplikacja|zeskanujaplikacje/u.test(compact) &&
+      (appOnlyCondition.test(compact) || /zeskanujaplikacje/u.test(compact)) &&
       !/niezeskanuj/u.test(compact)
     ) {
       add('requiresApp', true, evidence);
@@ -123,9 +163,12 @@ export function parsePromotionConditions(sourceTexts: ConditionEvidence[]) {
         add('multiBuy', { kind: 'quantity-discount', quantity, percent }, evidence);
       else if (!free) add('multiBuy', { kind: 'minimum-quantity', quantity }, evidence);
     }
-    const discount = /drug[ai],?(?:tansz[ay])?(?:produkt)?(?:o)?[-−]?(\d{1,3})%/u.exec(compact);
-    if (discount && +discount[1] > 0 && +discount[1] <= 100) {
-      add('multiBuy', { kind: 'nth-discount', position: 2, percent: +discount[1] }, evidence);
+    const discount =
+      /drug[ai],?(?:tansz[ay])?(?:produkt)?(?:o)?[-−]?(\d{1,3})%/u.exec(compact) ??
+      /(?:^|[^\d])2\.produkt(?:[-−](\d{1,3})%|(\d{1,3})%(?:taniej|rabatu|znizki))/u.exec(compact);
+    const secondItemPercent = discount ? Number(discount[1] ?? discount[2]) : 0;
+    if (secondItemPercent > 0 && secondItemPercent <= 100) {
+      add('multiBuy', { kind: 'nth-discount', position: 2, percent: secondItemPercent }, evidence);
       add('minimumQuantity', 2, evidence);
     }
     const limit =
@@ -134,9 +177,10 @@ export function parsePromotionConditions(sourceTexts: ConditionEvidence[]) {
       );
     if (limit) add('limitText', limit[0], evidence);
     if (/cenapozapromocja|cenaprzedobnizka/u.test(compact)) add('priceBasis', 'regular', evidence);
-    if (/cenaza1(?:szt|opak)[^\n]*przyzakupie\d/u.test(compact))
+    if (/cenaza1(?:szt|opak|but)[^\n]*przyzakupie\d/u.test(compact))
       add('priceBasis', 'conditional-unit', evidence);
   }
+  for (const [field, values] of fallback) if (!signals.has(field)) signals.set(field, values);
   function finding<T>(field: string): Finding<T> {
     let values = [...(signals.get(field)?.values() ?? [])];
     if (field === 'multiBuy') {

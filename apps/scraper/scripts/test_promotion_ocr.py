@@ -7,6 +7,7 @@ import os
 import tempfile
 import urllib.error
 from pathlib import Path
+from threading import Event
 from unittest.mock import MagicMock, patch
 from PIL import Image
 
@@ -130,12 +131,182 @@ class CropCacheTests(unittest.TestCase):
             self.assertNotEqual(results[0]['imageSha256'], results[1]['imageSha256'])
             self.assertNotEqual(results[0]['bbox'], results[1]['bbox'])
 
+    def test_reads_crop_and_full_page_with_one_ocr_engine(self):
+        import promotion_ocr
+
+        class Stream(io.StringIO):
+            def reconfigure(self, **kwargs):
+                pass
+
+        image = io.BytesIO()
+        Image.new('RGB', (40, 40), 'red').save(image, format='PNG')
+        engine = MagicMock(return_value=([], None))
+        with tempfile.TemporaryDirectory() as directory:
+            region = {'id': 'product', 'sourceUrl': 'leaflet', 'imageUrl': 'page', 'area': [0, 0, .5, .5]}
+            request = {'cacheDirectory': directory, 'items': [region],
+                       'pages': [{**region, 'id': 'page', 'area': [0, 0, 1, 1]}]}
+            output = Stream()
+            with patch.object(promotion_ocr, 'cached_page', return_value=(image.getvalue(), False)), \
+                    patch.object(promotion_ocr, 'RapidOCR', return_value=engine) as factory, \
+                    patch.object(promotion_ocr.sys, 'stdin', Stream(json.dumps(request))), \
+                    patch.object(promotion_ocr.sys, 'stdout', output):
+                promotion_ocr.main()
+            results = json.loads(output.getvalue())
+            self.assertEqual([row['id'] for row in results], ['product', 'page'])
+            self.assertEqual([row['bbox'] for row in results], [[0, 0, 20, 20], [0, 0, 40, 40]])
+            factory.assert_called_once()
+            self.assertEqual(engine.call_count, 2)
+
+    def test_worker_reuses_engine_across_requests(self):
+        import promotion_ocr
+
+        class Stream(io.StringIO):
+            def reconfigure(self, **kwargs):
+                pass
+
+        image = io.BytesIO()
+        Image.new('RGB', (40, 40), 'red').save(image, format='PNG')
+        engine = MagicMock(return_value=([], None))
+        with tempfile.TemporaryDirectory() as directory:
+            first = {'id': 'first', 'sourceUrl': 'leaflet', 'imageUrl': 'page', 'area': [0, 0, .5, .5]}
+            second = {**first, 'id': 'second', 'area': [0, 0, 1, 1]}
+            requests = [json.dumps({'cacheDirectory': directory, 'items': [region]})
+                        for region in (first, second)]
+            output = Stream()
+            with patch.dict(os.environ, {'OCR_THREADS': '4'}), \
+                    patch.object(promotion_ocr, 'cached_page', return_value=(image.getvalue(), False)), \
+                    patch.object(promotion_ocr, 'RapidOCR', return_value=engine) as factory, \
+                    patch.object(promotion_ocr.sys, 'stdin', Stream('\n'.join(requests))), \
+                    patch.object(promotion_ocr.sys, 'stdout', output):
+                promotion_ocr.serve()
+            results = [json.loads(row)[0] for row in output.getvalue().splitlines()]
+            self.assertEqual([row['id'] for row in results], ['first', 'second'])
+            factory.assert_called_once_with(
+                intra_op_num_threads=4, inter_op_num_threads=2, det_limit_side_len=1600,
+            )
+            self.assertEqual(engine.call_count, 2)
+
+    def test_page_limit_reuses_crop_cache_but_not_full_resolution_page_cache(self):
+        import promotion_ocr
+
+        image = io.BytesIO()
+        Image.new('RGB', (40, 40), 'red').save(image, format='PNG')
+        original = lambda size: ('original', size)
+        engine = MagicMock()
+        engine.text_det.get_preprocess = original
+        engine.side_effect = lambda crop: ([], None)
+        with tempfile.TemporaryDirectory() as directory:
+            crop = {'id': 'offer', 'sourceUrl': 'leaflet',
+                    'imageUrl': 'page', 'area': [0, 0, .5, .5]}
+            page = {**crop, 'id': 'page', 'area': [0, 0, 1, 1]}
+            request = {'cacheDirectory': directory, 'items': [crop], 'pages': [page]}
+            with patch.object(promotion_ocr, 'cached_page', return_value=(image.getvalue(), True)):
+                with patch.dict(os.environ, {'OCR_PAGE_MAX_SIDE': '0'}):
+                    baseline, _ = promotion_ocr.read_regions(request, engine)
+                with patch.dict(os.environ, {'OCR_PAGE_MAX_SIDE': '1280'}):
+                    with patch.object(promotion_ocr, 'DetPreProcess', return_value='limited') as preprocess:
+                        engine.side_effect = lambda crop: (
+                            [] if engine.text_det.get_preprocess(1800) == 'limited' else None, None
+                        )
+                        limited, _ = promotion_ocr.read_regions(request, engine)
+                        preprocess.assert_called_once_with(
+                            1280, 'max', engine.text_det.mean, engine.text_det.std,
+                        )
+                    repeated, _ = promotion_ocr.read_regions(request, engine)
+
+        self.assertEqual([row['ocrCached'] for row in baseline], [False, False])
+        self.assertEqual([row['ocrCached'] for row in limited], [True, False])
+        self.assertEqual([row['ocrCached'] for row in repeated], [True, True])
+        self.assertIs(engine.text_det.get_preprocess, original)
+
+    def test_reuses_page_image_and_keeps_input_order(self):
+        import promotion_ocr
+
+        image = io.BytesIO()
+        Image.new('RGB', (40, 40), 'red').save(image, format='PNG')
+        engine = MagicMock(return_value=([], None))
+        region = {'id': 'a', 'sourceUrl': 'leaflet-a', 'imageUrl': 'first', 'area': [0, 0, .5, .5]}
+        other = {**region, 'id': 'b', 'sourceUrl': 'leaflet-b', 'imageUrl': 'second'}
+        stray = {**region, 'id': 'invalid', 'area': [0, 0, 5, 5]}
+        page = {**region, 'id': 'full-page', 'area': [0, 0, 1, 1]}
+        with tempfile.TemporaryDirectory() as directory:
+            request = {'cacheDirectory': directory, 'items': [region, other, stray], 'pages': [page]}
+            with patch.object(promotion_ocr, 'cached_page', return_value=(image.getvalue(), False)) as fetch:
+                rows, _ = promotion_ocr.read_regions(request, engine)
+            self.assertEqual([args.args[0] for args in fetch.call_args_list], ['first', 'second'])
+            self.assertEqual([row['id'] for row in rows], ['a', 'b', 'invalid', 'full-page'])
+            self.assertEqual(rows[2]['error'], 'Invalid product region')
+            self.assertEqual(rows[3]['bbox'], [0, 0, 40, 40])
+            self.assertTrue(rows[3]['pageCached'])
+            self.assertEqual(engine.call_count, 2)
+
+    def test_reuses_unchanged_result_without_decoding_and_rechecks_a_changed_image(self):
+        import promotion_ocr
+
+        image = io.BytesIO()
+        Image.new('RGB', (40, 40), 'red').save(image, format='PNG')
+        raw = image.getvalue()
+        signature = hashlib.sha256(raw).hexdigest()
+        region = {'id': 'offer', 'sourceUrl': 'leaflet', 'imageUrl': 'page',
+                  'area': [0, 0, .5, .5], 'reuseImageSha256': signature}
+        page = {**region, 'id': 'full-page', 'area': [0, 0, 1, 1]}
+        engine = MagicMock(return_value=([], None))
+        with tempfile.TemporaryDirectory() as directory:
+            request = {'cacheDirectory': directory, 'items': [region], 'pages': [page]}
+            with patch.object(promotion_ocr, 'cached_page', return_value=(raw, True)):
+                with patch.object(promotion_ocr.Image, 'open') as decode:
+                    rows, _ = promotion_ocr.read_regions(request, engine)
+                    decode.assert_not_called()
+
+                self.assertTrue(rows[0]['stateReused'])
+                self.assertEqual(rows[0]['imageSha256'], signature)
+                self.assertNotIn('ocrLines', rows[1])
+                engine.assert_not_called()
+
+                changed = {**region, 'reuseImageSha256': '0' * 64}
+                reread, _ = promotion_ocr.read_regions({**request, 'items': [changed]}, engine)
+                self.assertNotIn('stateReused', reread[0])
+                self.assertIn('ocrLines', reread[1])
+                self.assertEqual(engine.call_count, 2)
+
     def test_changed_pixels_or_dimensions_invalidate_cache(self):
         image = Image.new('RGB', (40, 40), 'red')
         changed = image.copy()
         changed.putpixel((0, 0), (0, 0, 255))
         self.assertNotEqual(crop_cache_key(image), crop_cache_key(changed))
         self.assertNotEqual(crop_cache_key(image), crop_cache_key(image.crop((0, 0, 20, 40))))
+
+    def test_prefetches_one_page_during_ocr_and_continues_after_fetch_failure(self):
+        import promotion_ocr
+
+        image = io.BytesIO()
+        Image.new('RGB', (40, 40), 'red').save(image, format='PNG')
+        next_started = Event()
+        requests = []
+
+        def fetch(url, _cache):
+            requests.append(url)
+            if url == 'second':
+                next_started.set()
+                raise OSError('page unavailable')
+            return image.getvalue(), False
+
+        def recognize(_crop):
+            self.assertTrue(next_started.wait(2), 'next page was not fetched during OCR')
+            self.assertEqual(requests, ['first', 'second'])
+            return [], None
+
+        items = [{'id': url, 'sourceUrl': url, 'imageUrl': url, 'area': [0, 0, 1, 1]}
+                 for url in ('first', 'second', 'third')]
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {'OCR_PREFETCH_PAGES': '1'}), \
+                    patch.object(promotion_ocr, 'cached_page', side_effect=fetch):
+                rows, _ = promotion_ocr.read_regions(
+                    {'cacheDirectory': directory, 'items': items}, recognize,
+                )
+        self.assertEqual(requests, ['first', 'second', 'third'])
+        self.assertEqual([row['id'] for row in rows], ['first', 'second', 'third'])
+        self.assertEqual([row.get('error') for row in rows], [None, 'page unavailable', None])
 
 
 if __name__ == '__main__':
